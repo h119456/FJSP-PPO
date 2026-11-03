@@ -61,6 +61,29 @@ class EnvironmentTests(unittest.TestCase):
         self.assertGreater(state["machine_availability_gap_std"], 0.0)
         self.assertAlmostEqual(state["dispatchable_job_ratio"], 0.5)
 
+    def test_unified_observation_uses_zero_dynamic_features_for_static_state(self) -> None:
+        env = ResidualStressFJSPEnv(
+            tiny_instance(jobs=2), observation_profile="unified23"
+        )
+        observation, _ = env.reset()
+        state = dict(zip(env.OBSERVATION_NAMES, observation))
+
+        self.assertEqual(env.OBSERVATION_DIM, 23)
+        self.assertEqual(len(observation), 23)
+        for name in env.DYNAMIC_OBSERVATION_NAMES:
+            self.assertAlmostEqual(state[name], 0.0)
+
+        env.machine_repair_until["M1"] = env.current_time + 2.0
+        env.interrupted_job_machine["J1"] = "M1"
+        state = dict(zip(env.OBSERVATION_NAMES, env.get_observation()))
+        self.assertAlmostEqual(state["failed_production_machine_ratio"], 0.5)
+        self.assertGreater(state["mean_remaining_repair_time"], 0.0)
+        self.assertAlmostEqual(
+            state["mean_remaining_repair_time"],
+            state["max_remaining_repair_time"],
+        )
+        self.assertAlmostEqual(state["interrupted_job_ratio"], 0.5)
+
     def test_observation_profile_rejects_unknown_name(self) -> None:
         with self.assertRaises(ValueError):
             ResidualStressFJSPEnv(
@@ -83,7 +106,7 @@ class EnvironmentTests(unittest.TestCase):
             + sum(len(job.operations) for job in env.instance.jobs)
             + len(env.instance.machines)
         )
-        self.assertEqual(graph["node_features"].shape, (expected_nodes, 11))
+        self.assertEqual(graph["node_features"].shape, (expected_nodes, 13))
         self.assertEqual(graph["node_types"].shape, (expected_nodes,))
         self.assertEqual(graph["edge_index"].shape[0], 2)
         self.assertEqual(graph["edge_features"].shape[1], 2)
@@ -262,7 +285,8 @@ class EnvironmentTests(unittest.TestCase):
 
     def test_compact_observation_excludes_completed_job_dwell_and_deformation(self) -> None:
         env = ResidualStressFJSPEnv(
-            tiny_instance(min_dwell=3.0, compensation_threshold=10.0)
+            tiny_instance(min_dwell=3.0, compensation_threshold=10.0),
+            observation_profile="compact14",
         )
         env.reset()
         runtime = env.jobs["J1"]

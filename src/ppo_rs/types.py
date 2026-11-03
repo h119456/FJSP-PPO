@@ -39,6 +39,7 @@ class ScheduleEntry:
     start: float
     end: float
     independent_cost: float = 0.0
+    interruption_time: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

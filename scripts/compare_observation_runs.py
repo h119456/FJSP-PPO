@@ -30,6 +30,34 @@ MEAN_METRICS = (
 )
 
 
+def _summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    count = len(rows)
+    result = {
+        "instance_count": count,
+        **{
+            key: sum(float(row[key]) for row in rows) / count
+            for key in MEAN_METRICS
+        },
+        "schedule_violation_count": sum(
+            int(row["schedule_violation_count"]) for row in rows
+        ),
+        "process_readiness_violations": sum(
+            int(row["process_readiness_violations"]) for row in rows
+        ),
+        "truncated_count": sum(bool(row["truncated"]) for row in rows),
+    }
+    for key in (
+        "job_release_event_count",
+        "machine_breakdown_event_count",
+        "interrupted_operation_count",
+        "total_repair_time",
+        "total_interruption_time",
+    ):
+        if all(key in row for row in rows):
+            result[key] = sum(float(row[key]) for row in rows) / count
+    return result
+
+
 def _mapping(values: list[str], option: str) -> dict[str, str]:
     result: dict[str, str] = {}
     for value in values:
@@ -49,7 +77,8 @@ def _evaluate_split(
     action_feature_profile: str,
     seed: int,
 ) -> dict[str, Any]:
-    rows = []
+    rows: list[dict[str, Any]] = []
+    scenario_rows: dict[str, list[dict[str, Any]]] = {}
     for index, instance in enumerate(load_instances(source)):
         environment = ResidualStressFJSPEnv(
             instance,
@@ -60,21 +89,16 @@ def _evaluate_split(
             environment, model, seed=seed + index, deterministic=True
         )
         rows.append(metrics)
-    count = len(rows)
-    return {
-        "instance_count": count,
-        **{
-            key: sum(float(row[key]) for row in rows) / count
-            for key in MEAN_METRICS
-        },
-        "schedule_violation_count": sum(
-            int(row["schedule_violation_count"]) for row in rows
-        ),
-        "process_readiness_violations": sum(
-            int(row["process_readiness_violations"]) for row in rows
-        ),
-        "truncated_count": sum(bool(row["truncated"]) for row in rows),
-    }
+        scenario = instance.dynamic_events.get("scenario")
+        if scenario is not None:
+            scenario_rows.setdefault(str(scenario), []).append(metrics)
+    result = _summarize_rows(rows)
+    if scenario_rows:
+        result["scenarios"] = {
+            scenario: _summarize_rows(values)
+            for scenario, values in sorted(scenario_rows.items())
+        }
+    return result
 
 
 def main() -> None:

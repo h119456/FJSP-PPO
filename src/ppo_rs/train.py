@@ -106,7 +106,12 @@ def _checkpoint_payload(
         "hidden_dim": int(config.get("hidden_dim", 128)),
         "observation_dim": observation_dim,
         "action_feature_dim": action_feature_dim,
-        "observation_profile": str(config.get("observation_profile", "compact14")),
+        "observation_profile": str(
+            config.get(
+                "observation_profile",
+                ResidualStressFJSPEnv.DEFAULT_OBSERVATION_PROFILE,
+            )
+        ),
         "action_feature_profile": str(
             config.get("action_feature_profile", "compact21")
         ),
@@ -126,7 +131,10 @@ def train(
     config: dict,
     *,
     resume_from: str | Path | None = None,
+    initialize_from: str | Path | None = None,
 ) -> tuple[nn.Module, list[dict[str, Any]], dict[str, Any]]:
+    if resume_from is not None and initialize_from is not None:
+        raise ValueError("resume_from and initialize_from are mutually exclusive")
     seed = int(config.get("seed", 7))
     set_seed(seed)
     device = choose_device(str(config.get("device", "auto")))
@@ -134,7 +142,12 @@ def train(
     if train_source is None:
         raise ValueError("config needs train_instances or train_instance")
     train_instances = load_instances(train_source)
-    observation_profile = str(config.get("observation_profile", "compact14"))
+    observation_profile = str(
+        config.get(
+            "observation_profile",
+            ResidualStressFJSPEnv.DEFAULT_OBSERVATION_PROFILE,
+        )
+    )
     action_feature_profile = str(
         config.get("action_feature_profile", "compact21")
     )
@@ -218,6 +231,36 @@ def train(
         "observation_dim": observation_dim,
         "action_feature_dim": action_feature_dim,
     }
+
+    if initialize_from is not None:
+        initialization_path = Path(initialize_from)
+        checkpoint = torch.load(
+            initialization_path, map_location=device, weights_only=False
+        )
+        if int(checkpoint["observation_dim"]) != observation_dim:
+            raise ValueError(
+                "initial checkpoint observation dimension does not match the environment"
+            )
+        if int(checkpoint["action_feature_dim"]) != action_feature_dim:
+            raise ValueError(
+                "initial checkpoint action dimension does not match the environment"
+            )
+        if int(checkpoint["hidden_dim"]) != int(config.get("hidden_dim", 128)):
+            raise ValueError(
+                "initial checkpoint hidden dimension does not match the training config"
+            )
+        if str(checkpoint.get("model_type", "mlp")) != model_type:
+            raise ValueError(
+                "initial checkpoint model type does not match the training config"
+            )
+        model.load_state_dict(checkpoint["model_state"])
+        # Deliberately do not restore optimizer state, episode counters, or
+        # histories: dynamic fine-tuning starts a new run with fresh Adam
+        # moments and its own learning-rate schedule.
+        print(
+            f"initialized model weights from {initialization_path} "
+            f"(source_episode={int(checkpoint['episode'])}); optimizer reset"
+        )
 
     if resume_from is not None:
         resume_path = Path(resume_from)
@@ -434,9 +477,19 @@ def main() -> None:
         default=None,
         help="checkpoint to resume from; existing histories must match its episode",
     )
+    parser.add_argument(
+        "--initialize-from",
+        default=None,
+        help="load model weights only and start a new run with a fresh optimizer",
+    )
     args = parser.parse_args()
     config = load_run_config(args.config)
-    _, _, evaluation = train(config, resume_from=args.resume)
+    initialize_from = args.initialize_from or config.get("initialize_from")
+    _, _, evaluation = train(
+        config,
+        resume_from=args.resume,
+        initialize_from=initialize_from,
+    )
     print(f"evaluation objective={evaluation['objective']:.4f}")
 
 

@@ -105,6 +105,7 @@ class InstanceSpec:
     physics: PhysicsSpec = field(default_factory=PhysicsSpec)
     objective: ObjectiveSpec = field(default_factory=ObjectiveSpec)
     environment: EnvironmentSpec = field(default_factory=EnvironmentSpec)
+    dynamic_events: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         machine_set = set(self.machines)
@@ -214,6 +215,7 @@ def instance_from_dict(data: dict[str, Any]) -> InstanceSpec:
         physics=physics,
         objective=objective,
         environment=environment,
+        dynamic_events=dict(data.get("dynamic_events", {})),
     )
 
 

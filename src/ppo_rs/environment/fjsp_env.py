@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 
 from ppo_rs.config import InstanceSpec, OperationSpec
+from ppo_rs.environment.dynamic_events import DynamicEvent, materialize_dynamic_events
 from ppo_rs.environment.scheduler import MachineLedger
 from ppo_rs.physics import (
     CompensationModel,
@@ -45,6 +46,7 @@ class _RunningEvent:
     action: Action
     end: float
     start_deformation: float
+    entry: ScheduleEntry
 
 
 class DeformationFJSPEnv:
@@ -80,12 +82,24 @@ class DeformationFJSPEnv:
         "machine_availability_gap_std",
         "dispatchable_job_ratio",
     )
+    DYNAMIC_OBSERVATION_NAMES = (
+        "failed_production_machine_ratio",
+        "mean_remaining_repair_time",
+        "max_remaining_repair_time",
+        "interrupted_job_ratio",
+    )
+    UNIFIED_OBSERVATION_NAMES = (
+        ENHANCED_OBSERVATION_NAMES + DYNAMIC_OBSERVATION_NAMES
+    )
     OBSERVATION_PROFILES = {
         "compact14": COMPACT_OBSERVATION_NAMES,
         "enhanced19": ENHANCED_OBSERVATION_NAMES,
+        "unified23": UNIFIED_OBSERVATION_NAMES,
     }
-    # Class-level defaults retain compatibility with existing callers and tests.
-    OBSERVATION_NAMES = COMPACT_OBSERVATION_NAMES
+    DEFAULT_OBSERVATION_PROFILE = "unified23"
+    # Static and dynamic runs use one input schema. Legacy profiles remain
+    # available explicitly so old experiments can still be reproduced.
+    OBSERVATION_NAMES = UNIFIED_OBSERVATION_NAMES
     COMPACT_ACTION_FEATURE_NAMES = (
         "is_normal",
         "is_stress_relief",
@@ -136,7 +150,14 @@ class DeformationFJSPEnv:
         "operation_to_compensation",
         "compensation_to_operation",
     )
-    GRAPH_NODE_FEATURE_DIM = 11
+    GRAPH_BASE_NODE_FEATURE_DIM = 11
+    GRAPH_DYNAMIC_NODE_FEATURE_NAMES = (
+        "event_affected",
+        "normalized_time_to_recovery",
+    )
+    GRAPH_NODE_FEATURE_DIM = (
+        GRAPH_BASE_NODE_FEATURE_DIM + len(GRAPH_DYNAMIC_NODE_FEATURE_NAMES)
+    )
     GRAPH_EDGE_FEATURE_DIM = 2
     GRAPH_NODE_TYPE_COUNT = len(GRAPH_NODE_TYPES)
     GRAPH_EDGE_TYPE_COUNT = len(GRAPH_EDGE_TYPES)
@@ -148,7 +169,7 @@ class DeformationFJSPEnv:
         deformation_model: DeformationModel | None = None,
         stress_relief_model: StressReliefModel | None = None,
         compensation_model: CompensationModel | None = None,
-        observation_profile: str = "compact14",
+        observation_profile: str = DEFAULT_OBSERVATION_PROFILE,
         action_feature_profile: str = "compact21",
     ) -> None:
         if observation_profile not in self.OBSERVATION_PROFILES:
@@ -159,6 +180,11 @@ class DeformationFJSPEnv:
         self.observation_profile = observation_profile
         self.OBSERVATION_NAMES = self.OBSERVATION_PROFILES[observation_profile]
         self.OBSERVATION_DIM = len(self.OBSERVATION_NAMES)
+        self.GRAPH_NODE_FEATURE_DIM = (
+            self.GRAPH_BASE_NODE_FEATURE_DIM
+            if observation_profile in {"compact14", "enhanced19"}
+            else type(self).GRAPH_NODE_FEATURE_DIM
+        )
         if action_feature_profile not in self.ACTION_FEATURE_PROFILES:
             choices = ", ".join(sorted(self.ACTION_FEATURE_PROFILES))
             raise ValueError(
@@ -184,6 +210,11 @@ class DeformationFJSPEnv:
             for job in instance.jobs
             for operation in job.operations
         ]
+        self._production_machines = frozenset(
+            machine
+            for operation in operations
+            for machine in operation.machines
+        )
         self._minimum_operation_durations = {
             (job.job_id, operation.operation_id): min(operation.machines.values())
             for job in instance.jobs
@@ -250,18 +281,26 @@ class DeformationFJSPEnv:
         self._rng = random.Random()
         self.reset()
 
+    def _active_job_specs(self) -> list[Any]:
+        """Return only jobs currently visible to the policy."""
+
+        if not hasattr(self, "jobs"):
+            return list(self.instance.jobs)
+        return [job for job in self.instance.jobs if job.job_id in self.jobs]
+
     def _initialize_graph_schema(self) -> None:
-        """Build the immutable topology shared by every state of this instance."""
+        """Build topology for the currently visible jobs and all machines."""
 
         self._graph_job_nodes: dict[str, int] = {}
         self._graph_operation_nodes: dict[tuple[str, str], int] = {}
         self._graph_machine_nodes: dict[str, int] = {}
         node_types: list[int] = []
 
-        for job in self.instance.jobs:
+        active_jobs = self._active_job_specs()
+        for job in active_jobs:
             self._graph_job_nodes[job.job_id] = len(node_types)
             node_types.append(0)
-        for job in self.instance.jobs:
+        for job in active_jobs:
             for operation in job.operations:
                 self._graph_operation_nodes[(job.job_id, operation.operation_id)] = len(
                     node_types
@@ -293,7 +332,7 @@ class DeformationFJSPEnv:
                 ]
             )
 
-        for job in self.instance.jobs:
+        for job in active_jobs:
             job_node = self._graph_job_nodes[job.job_id]
             for operation_index, operation in enumerate(job.operations):
                 operation_node = self._graph_operation_nodes[
@@ -365,13 +404,48 @@ class DeformationFJSPEnv:
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[list[float], dict[str, Any]]:
         del options
+        event_seed = 0 if seed is None else seed
         if seed is not None:
             self._rng.seed(seed)
         self.current_time = 0.0
         self.decision_count = 0
         self.ledger = MachineLedger(self.instance.machines)
-        self.jobs = {job.job_id: _JobRuntime() for job in self.instance.jobs}
+        self._pending_dynamic_events = list(
+            materialize_dynamic_events(self.instance, seed=event_seed)
+        )
+        delayed_jobs = {
+            str(event.payload["job_id"])
+            for event in self._pending_dynamic_events
+            if event.event_type == "job_release"
+        }
+        self._unreleased_job_ids = set(delayed_jobs)
+        self.jobs = {
+            job.job_id: _JobRuntime()
+            for job in self.instance.jobs
+            if job.job_id not in delayed_jobs
+        }
+        if not self.jobs:
+            raise ValueError("a dynamic episode must release at least one job at time zero")
+        self.job_release_times = {job_id: 0.0 for job_id in self.jobs}
+        self._episode_initial_total_workload = sum(
+            self._initial_job_workloads[job_id] for job_id in self.jobs
+        )
+        self._episode_initial_max_job_workload = max(
+            (self._initial_job_workloads[job_id] for job_id in self.jobs),
+            default=1.0,
+        )
+        self._initialize_graph_schema()
         self.running: list[_RunningEvent] = []
+        # Populated by the dynamic-event transition layer. Keeping these fields
+        # in static runs makes the static and dynamic observation schemas equal;
+        # their feature values simply remain zero when no failure is active.
+        self.machine_repair_until: dict[str, float] = {}
+        self.interrupted_job_machine: dict[str, str] = {}
+        self.breakdown_windows: list[tuple[str, float, float]] = []
+        self.dynamic_event_log: list[dict[str, Any]] = []
+        self.dynamic_interruption_count = 0
+        self.total_repair_time = 0.0
+        self.total_interruption_time = 0.0
         self.relief_cost = 0.0
         self.compensation_cost = 0.0
         self._terminated = False
@@ -575,6 +649,16 @@ class DeformationFJSPEnv:
 
     def _next_relevant_time(self) -> float | None:
         candidates = [event.end for event in self.running if event.end > self.current_time + 1e-9]
+        candidates.extend(
+            event.time
+            for event in self._pending_dynamic_events
+            if event.time > self.current_time + 1e-9
+        )
+        candidates.extend(
+            repair_until
+            for repair_until in self.machine_repair_until.values()
+            if repair_until > self.current_time + 1e-9
+        )
         for job_id, runtime in self.jobs.items():
             operation = self._operation(job_id)
             if runtime.busy or operation is None or runtime.next_operation == 0:
@@ -655,7 +739,7 @@ class DeformationFJSPEnv:
         elif action.kind is ActionType.COMPENSATION:
             runtime.compensation_count += 1
             self.compensation_cost += action.cost
-        self.running.append(_RunningEvent(action, end, start_deformation))
+        self.running.append(_RunningEvent(action, end, start_deformation, entry))
 
     def _advance_while_forced(self) -> None:
         while not self._all_complete():
@@ -692,6 +776,89 @@ class DeformationFJSPEnv:
         self.running = [event for event in self.running if event.end > new_time + 1e-9]
         for event in sorted(finished, key=lambda item: item.end):
             self._complete_event(event)
+        due_dynamic = [
+            event
+            for event in self._pending_dynamic_events
+            if event.time <= new_time + 1e-9
+        ]
+        self._pending_dynamic_events = [
+            event
+            for event in self._pending_dynamic_events
+            if event.time > new_time + 1e-9
+        ]
+        for event in sorted(
+            due_dynamic, key=lambda item: (item.time, item.event_type)
+        ):
+            self._apply_dynamic_event(event)
+
+    def _apply_dynamic_event(self, event: DynamicEvent) -> None:
+        if event.event_type == "job_release":
+            self._release_job(event)
+            return
+        if event.event_type == "machine_breakdown":
+            self._break_machine(event)
+            return
+        raise ValueError(f"unsupported dynamic event {event.event_type!r}")
+
+    def _release_job(self, event: DynamicEvent) -> None:
+        job_id = str(event.payload["job_id"])
+        if job_id not in self._unreleased_job_ids:
+            raise RuntimeError(f"job {job_id!r} is not waiting for release")
+        self._unreleased_job_ids.remove(job_id)
+        self.jobs[job_id] = _JobRuntime(anchor_time=event.time)
+        self.job_release_times[job_id] = event.time
+        self.dynamic_event_log.append(event.to_dict())
+        # Node IDs are local to each graph snapshot, so rebuilding after a
+        # release exposes the new job without leaking it beforehand.
+        self._initialize_graph_schema()
+
+    def _break_machine(self, event: DynamicEvent) -> None:
+        machine_id = str(event.payload["machine_id"])
+        if str(event.payload.get("interruption_policy", "pause_resume")) != "pause_resume":
+            raise ValueError("only pause_resume breakdown semantics are supported")
+        if machine_id not in self._production_machines:
+            raise ValueError(f"breakdown targets non-production machine {machine_id!r}")
+        repair_duration = float(event.payload["repair_duration"])
+        if repair_duration <= 0.0:
+            raise ValueError("repair duration must be positive")
+        if self.machine_repair_until.get(machine_id, 0.0) > event.time + 1e-9:
+            raise RuntimeError(f"overlapping failures on machine {machine_id!r}")
+
+        repair_until = event.time + repair_duration
+        self.machine_repair_until[machine_id] = repair_until
+        self.breakdown_windows.append((machine_id, event.time, repair_until))
+        self.total_repair_time += repair_duration
+        interrupted = next(
+            (
+                running
+                for running in self.running
+                if running.action.machine_id == machine_id
+                and running.end > event.time + 1e-9
+            ),
+            None,
+        )
+        if interrupted is None:
+            self.ledger.available_at[machine_id] = max(
+                self.ledger.available_at[machine_id], repair_until
+            )
+        else:
+            interrupted.end += repair_duration
+            interrupted.entry.end += repair_duration
+            interrupted.entry.interruption_time += repair_duration
+            self.ledger.available_at[machine_id] += repair_duration
+            if interrupted.action.job_id is not None:
+                self.interrupted_job_machine[
+                    interrupted.action.job_id
+                ] = machine_id
+            self.dynamic_interruption_count += 1
+            self.total_interruption_time += repair_duration
+
+        row = event.to_dict()
+        row["repair_until"] = repair_until
+        row["interrupted_job_id"] = (
+            interrupted.action.job_id if interrupted is not None else None
+        )
+        self.dynamic_event_log.append(row)
 
     def _complete_event(self, event: _RunningEvent) -> None:
         action = event.action
@@ -762,7 +929,7 @@ class DeformationFJSPEnv:
         return all(
             runtime.next_operation == len(self._jobs_by_id[job_id].operations)
             for job_id, runtime in self.jobs.items()
-        ) and not self.running
+        ) and not self.running and not self._unreleased_job_ids
 
     def _resolve_dead_end(self) -> None:
         if self._all_complete():
@@ -801,6 +968,13 @@ class DeformationFJSPEnv:
     def get_observation(self) -> list[float]:
         job_count = max(1, len(self.jobs))
         machine_count = max(1, len(self.instance.machines))
+        visible_total_operations = max(
+            1,
+            sum(
+                len(self._jobs_by_id[job_id].operations)
+                for job_id in self.jobs
+            ),
+        )
         completed = sum(runtime.next_operation for runtime in self.jobs.values())
         busy_jobs = sum(runtime.busy for runtime in self.jobs.values())
         busy_machines = sum(
@@ -858,7 +1032,7 @@ class DeformationFJSPEnv:
         max_comp = max(1, self.instance.compensation.max_per_job * job_count)
         observation = [
             self.current_time / max(1.0, self.instance.environment.max_time),
-            completed / max(1, self._total_operations),
+            completed / visible_total_operations,
             busy_jobs / job_count,
             busy_machines / machine_count,
             sum(availability_gaps) / machine_count / max(1.0, self._duration_scale),
@@ -876,7 +1050,7 @@ class DeformationFJSPEnv:
             return observation
 
         remaining_job_workloads = []
-        for job in self.instance.jobs:
+        for job in self._active_job_specs():
             start = self.jobs[job.job_id].next_operation
             remaining_job_workloads.append(
                 sum(
@@ -901,9 +1075,9 @@ class DeformationFJSPEnv:
         observation.extend(
             [
                 remaining_total_workload
-                / max(1e-9, self._initial_total_workload),
+                / max(1e-9, self._episode_initial_total_workload),
                 max(remaining_job_workloads, default=0.0)
-                / max(1e-9, self._initial_max_job_workload),
+                / max(1e-9, self._episode_initial_max_job_workload),
                 max(availability_gaps, default=0.0)
                 / max(1.0, self._duration_scale),
                 float(np.std(availability_gaps))
@@ -911,7 +1085,40 @@ class DeformationFJSPEnv:
                 dispatchable_jobs / job_count,
             ]
         )
+        if self.observation_profile == "enhanced19":
+            return observation
+
+        active_repairs = self._active_machine_repairs()
+        remaining_repairs = list(active_repairs.values())
+        interrupted_jobs = sum(
+            job_id in self.jobs and machine_id in active_repairs
+            for job_id, machine_id in self.interrupted_job_machine.items()
+        )
+        observation.extend(
+            [
+                len(active_repairs) / max(1, len(self._production_machines)),
+                (
+                    sum(remaining_repairs) / len(remaining_repairs)
+                    if remaining_repairs
+                    else 0.0
+                )
+                / max(1.0, self._duration_scale),
+                max(remaining_repairs, default=0.0)
+                / max(1.0, self._duration_scale),
+                interrupted_jobs / job_count,
+            ]
+        )
         return observation
+
+    def _active_machine_repairs(self) -> dict[str, float]:
+        """Return observable remaining repair times for production machines."""
+
+        return {
+            machine_id: repair_until - self.current_time
+            for machine_id, repair_until in self.machine_repair_until.items()
+            if machine_id in self._production_machines
+            and repair_until > self.current_time + 1e-9
+        }
 
     def _minimum_compensation_duration(self, job_id: str) -> float:
         spec = self.instance.compensation
@@ -931,7 +1138,7 @@ class DeformationFJSPEnv:
         if machine_id is None:
             return 0.0
         occupied = sum(
-            entry.end - entry.start
+            entry.end - entry.start - entry.interruption_time
             for entry in self.ledger.entries
             if entry.machine_id == machine_id
         )
@@ -948,12 +1155,16 @@ class DeformationFJSPEnv:
             (len(self._graph_node_types), self.GRAPH_NODE_FEATURE_DIM),
             dtype=np.float32,
         )
-        job_count = max(1, len(self.instance.jobs))
+        active_jobs = self._active_job_specs()
+        job_count = max(1, len(active_jobs))
         machine_count = max(1, len(self.instance.machines))
-        total_operations = max(1, self._total_operations)
+        total_operations = max(
+            1, sum(len(job.operations) for job in active_jobs)
+        )
         threshold = self.instance.compensation.trigger_deformation
+        active_repairs = self._active_machine_repairs()
 
-        for job in self.instance.jobs:
+        for job in active_jobs:
             runtime = self.jobs[job.job_id]
             node = self._graph_job_nodes[job.job_id]
             operation = self._operation(job.job_id)
@@ -992,13 +1203,20 @@ class DeformationFJSPEnv:
                 runtime.compensation_count
                 / max(1, self.instance.compensation.max_per_job),
             ]
+            if self.GRAPH_NODE_FEATURE_DIM > self.GRAPH_BASE_NODE_FEATURE_DIM:
+                interrupted_machine = self.interrupted_job_machine.get(job.job_id)
+                recovery = active_repairs.get(interrupted_machine or "", 0.0)
+                features[node, 11:13] = [
+                    float(recovery > 0.0),
+                    recovery / max(1.0, self._duration_scale),
+                ]
 
         running_normal = {
             (event.action.job_id, event.action.operation_id)
             for event in self.running
             if event.action.kind is ActionType.NORMAL
         }
-        for job in self.instance.jobs:
+        for job in active_jobs:
             runtime = self.jobs[job.job_id]
             for operation_index, operation in enumerate(job.operations):
                 node = self._graph_operation_nodes[
@@ -1021,13 +1239,28 @@ class DeformationFJSPEnv:
                     float(operation_index == 0),
                     float(operation_index + 1 == len(job.operations)),
                 ]
+                if self.GRAPH_NODE_FEATURE_DIM > self.GRAPH_BASE_NODE_FEATURE_DIM:
+                    interrupted_machine = self.interrupted_job_machine.get(job.job_id)
+                    recovery = active_repairs.get(interrupted_machine or "", 0.0)
+                    is_interrupted_operation = (
+                        recovery > 0.0
+                        and operation_index == runtime.next_operation
+                    )
+                    features[node, 11:13] = [
+                        float(is_interrupted_operation),
+                        (
+                            recovery / max(1.0, self._duration_scale)
+                            if is_interrupted_operation
+                            else 0.0
+                        ),
+                    ]
 
         action_loads = {machine: 0 for machine in self.instance.machines}
         for action in selected:
             if action.machine_id is not None:
                 action_loads[action.machine_id] += 1
         compatibility_counts = {machine: 0 for machine in self.instance.machines}
-        for job in self.instance.jobs:
+        for job in active_jobs:
             for operation in job.operations:
                 for machine in operation.machines:
                     compatibility_counts[machine] += 1
@@ -1060,6 +1293,12 @@ class DeformationFJSPEnv:
                 auxiliary_duration / max(1.0, self._duration_scale),
                 auxiliary_cost / self._cost_scale,
             ]
+            if self.GRAPH_NODE_FEATURE_DIM > self.GRAPH_BASE_NODE_FEATURE_DIM:
+                recovery = active_repairs.get(machine, 0.0)
+                features[node, 11:13] = [
+                    float(recovery > 0.0),
+                    recovery / max(1.0, self._duration_scale),
+                ]
 
         action_nodes = np.full((len(selected), 3), -1, dtype=np.int64)
         for index, action in enumerate(selected):
@@ -1104,7 +1343,7 @@ class DeformationFJSPEnv:
                     machine_candidate_counts[candidate.machine_id] = (
                         machine_candidate_counts.get(candidate.machine_id, 0) + 1
                     )
-        job_count = max(1, len(self.instance.jobs))
+        job_count = max(1, len(self.jobs))
         for action in selected:
             kind = [float(action.kind is value) for value in ActionType]
             if action.job_id is None:
@@ -1250,7 +1489,7 @@ class DeformationFJSPEnv:
             (runtime.completed_at or 0.0 for runtime in self.jobs.values()), default=0.0
         )
         normal_time = sum(
-            entry.end - entry.start
+            entry.end - entry.start - entry.interruption_time
             for entry in self.ledger.entries
             if entry.kind is ActionType.NORMAL
         )
@@ -1269,7 +1508,7 @@ class DeformationFJSPEnv:
         utilization = {
             machine: (
                 sum(
-                    entry.end - entry.start
+                    entry.end - entry.start - entry.interruption_time
                     for entry in self.ledger.entries
                     if entry.machine_id == machine
                 )
@@ -1284,6 +1523,24 @@ class DeformationFJSPEnv:
             if validate
             else []
         )
+        if validate:
+            for entry in self.ledger.entries:
+                release_time = self.job_release_times.get(entry.job_id, 0.0)
+                if entry.start < release_time - 1e-9:
+                    violations.append(
+                        f"dynamic release: {entry.job_id}/{entry.operation_id} "
+                        f"starts at {entry.start:.6g} before release {release_time:.6g}"
+                    )
+                for machine_id, failed_at, repaired_at in self.breakdown_windows:
+                    if (
+                        entry.machine_id == machine_id
+                        and entry.start >= failed_at - 1e-9
+                        and entry.start < repaired_at - 1e-9
+                    ):
+                        violations.append(
+                            f"dynamic breakdown: {entry.job_id}/{entry.operation_id} "
+                            f"starts on {machine_id} during repair"
+                        )
         readiness_violations = [
             violation
             for violation in violations
@@ -1314,6 +1571,17 @@ class DeformationFJSPEnv:
             ),
             "compensation_cost": self.compensation_cost,
             "total_independent_cost": self.relief_cost + self.compensation_cost,
+            "job_release_event_count": sum(
+                event["type"] == "job_release"
+                for event in self.dynamic_event_log
+            ),
+            "machine_breakdown_event_count": sum(
+                event["type"] == "machine_breakdown"
+                for event in self.dynamic_event_log
+            ),
+            "interrupted_operation_count": self.dynamic_interruption_count,
+            "total_repair_time": self.total_repair_time,
+            "total_interruption_time": self.total_interruption_time,
             "objective": self._partial_objective(),
             "process_readiness_violations": len(readiness_violations),
             "schedule_violation_count": len(violations),

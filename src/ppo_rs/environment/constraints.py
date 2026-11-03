@@ -89,16 +89,18 @@ def schedule_violations(
                 )
             else:
                 expected = operation.machines[entry.machine_id]
-                if abs(_duration(entry) - expected) > TOLERANCE:
+                effective_duration = _duration(entry) - entry.interruption_time
+                if abs(effective_duration - expected) > TOLERANCE:
                     violations.append(
                         f"incorrect duration for {entry.job_id}/{entry.operation_id} "
-                        f"on {entry.machine_id}: {_duration(entry):.6g}, expected {expected:.6g}"
+                        f"on {entry.machine_id}: {effective_duration:.6g}, "
+                        f"expected {expected:.6g}"
                     )
         elif entry.kind is ActionType.STRESS_RELIEF:
             expected = instance.stress_relief.machines.get(entry.machine_id)
             if expected is None:
                 violations.append(f"unqualified stress-relief machine {entry.machine_id}")
-            elif abs(_duration(entry) - expected) > TOLERANCE:
+            elif abs(_duration(entry) - entry.interruption_time - expected) > TOLERANCE:
                 violations.append(
                     f"incorrect stress-relief duration on {entry.machine_id}: "
                     f"{_duration(entry):.6g}, expected {expected:.6g}"
@@ -127,7 +129,7 @@ def schedule_violations(
                 )
             if expected is None:
                 violations.append(f"unqualified compensation machine {entry.machine_id}")
-            elif abs(_duration(entry) - expected) > TOLERANCE:
+            elif abs(_duration(entry) - entry.interruption_time - expected) > TOLERANCE:
                 violations.append(
                     f"incorrect compensation duration on {entry.machine_id}: "
                     f"{_duration(entry):.6g}, expected {expected:.6g}"
