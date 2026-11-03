@@ -46,8 +46,30 @@ def main() -> None:
                 f"checkpoint={checkpoint_version}, current={current_version}; retrain the model"
             )
         model = build_model_from_checkpoint(checkpoint, device)
+        observation_profile = str(
+            checkpoint.get(
+                "observation_profile",
+                checkpoint.get("config", {}).get(
+                    "observation_profile", "compact14"
+                ),
+            )
+        )
+        action_feature_profile = str(
+            checkpoint.get(
+                "action_feature_profile",
+                checkpoint.get("config", {}).get(
+                    "action_feature_profile", "compact21"
+                ),
+            )
+        )
         metrics, schedule = evaluate_model(
-            ResidualStressFJSPEnv(instance), model, seed=args.seed
+            ResidualStressFJSPEnv(
+                instance,
+                observation_profile=observation_profile,
+                action_feature_profile=action_feature_profile,
+            ),
+            model,
+            seed=args.seed,
         )
         results.append(metrics)
         write_json(output / "ppo_schedule.json", schedule)

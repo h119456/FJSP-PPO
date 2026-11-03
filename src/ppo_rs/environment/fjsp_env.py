@@ -57,7 +57,7 @@ class DeformationFJSPEnv:
 
     ENVIRONMENT_SEMANTICS_VERSION = 7
 
-    OBSERVATION_NAMES = (
+    COMPACT_OBSERVATION_NAMES = (
         "normalized_time",
         "completed_operation_ratio",
         "busy_job_ratio",
@@ -73,7 +73,20 @@ class DeformationFJSPEnv:
         "compensation_usage_ratio",
         "mandatory_compensation_job_ratio",
     )
-    ACTION_FEATURE_NAMES = (
+    ENHANCED_OBSERVATION_NAMES = COMPACT_OBSERVATION_NAMES + (
+        "remaining_processing_load_ratio",
+        "max_job_remaining_load_ratio",
+        "max_machine_availability_gap",
+        "machine_availability_gap_std",
+        "dispatchable_job_ratio",
+    )
+    OBSERVATION_PROFILES = {
+        "compact14": COMPACT_OBSERVATION_NAMES,
+        "enhanced19": ENHANCED_OBSERVATION_NAMES,
+    }
+    # Class-level defaults retain compatibility with existing callers and tests.
+    OBSERVATION_NAMES = COMPACT_OBSERVATION_NAMES
+    COMPACT_ACTION_FEATURE_NAMES = (
         "is_normal",
         "is_stress_relief",
         "is_compensation",
@@ -96,6 +109,17 @@ class DeformationFJSPEnv:
         "normalized_mandatory_compensation_cost",
         "machine_utilization",
     )
+    ENHANCED_ACTION_FEATURE_NAMES = COMPACT_ACTION_FEATURE_NAMES + (
+        "relative_fastest_duration_score",
+        "job_remaining_workload_ratio",
+        "machine_candidate_pressure",
+        "normalized_remaining_dwell_time",
+    )
+    ACTION_FEATURE_PROFILES = {
+        "compact21": COMPACT_ACTION_FEATURE_NAMES,
+        "enhanced25": ENHANCED_ACTION_FEATURE_NAMES,
+    }
+    ACTION_FEATURE_NAMES = COMPACT_ACTION_FEATURE_NAMES
     OBSERVATION_DIM = len(OBSERVATION_NAMES)
     ACTION_FEATURE_DIM = len(ACTION_FEATURE_NAMES)
 
@@ -124,7 +148,28 @@ class DeformationFJSPEnv:
         deformation_model: DeformationModel | None = None,
         stress_relief_model: StressReliefModel | None = None,
         compensation_model: CompensationModel | None = None,
+        observation_profile: str = "compact14",
+        action_feature_profile: str = "compact21",
     ) -> None:
+        if observation_profile not in self.OBSERVATION_PROFILES:
+            choices = ", ".join(sorted(self.OBSERVATION_PROFILES))
+            raise ValueError(
+                f"unknown observation_profile {observation_profile!r}; choose {choices}"
+            )
+        self.observation_profile = observation_profile
+        self.OBSERVATION_NAMES = self.OBSERVATION_PROFILES[observation_profile]
+        self.OBSERVATION_DIM = len(self.OBSERVATION_NAMES)
+        if action_feature_profile not in self.ACTION_FEATURE_PROFILES:
+            choices = ", ".join(sorted(self.ACTION_FEATURE_PROFILES))
+            raise ValueError(
+                f"unknown action_feature_profile {action_feature_profile!r}; "
+                f"choose {choices}"
+            )
+        self.action_feature_profile = action_feature_profile
+        self.ACTION_FEATURE_NAMES = self.ACTION_FEATURE_PROFILES[
+            action_feature_profile
+        ]
+        self.ACTION_FEATURE_DIM = len(self.ACTION_FEATURE_NAMES)
         self.instance = instance
         p = instance.physics
         self.deformation_model = deformation_model or SyntheticIncreasingDeformation()
@@ -139,6 +184,22 @@ class DeformationFJSPEnv:
             for job in instance.jobs
             for operation in job.operations
         ]
+        self._minimum_operation_durations = {
+            (job.job_id, operation.operation_id): min(operation.machines.values())
+            for job in instance.jobs
+            for operation in job.operations
+        }
+        self._initial_job_workloads = {
+            job.job_id: sum(
+                self._minimum_operation_durations[(job.job_id, operation.operation_id)]
+                for operation in job.operations
+            )
+            for job in instance.jobs
+        }
+        self._initial_total_workload = sum(self._initial_job_workloads.values())
+        self._initial_max_job_workload = max(
+            self._initial_job_workloads.values(), default=1.0
+        )
         self._deformation_scale = max(
             (
                 operation.deformation_scale
@@ -795,7 +856,7 @@ class DeformationFJSPEnv:
         ]
         max_relief = max(1, self.instance.stress_relief.max_per_job * job_count)
         max_comp = max(1, self.instance.compensation.max_per_job * job_count)
-        return [
+        observation = [
             self.current_time / max(1.0, self.instance.environment.max_time),
             completed / max(1, self._total_operations),
             busy_jobs / job_count,
@@ -811,6 +872,46 @@ class DeformationFJSPEnv:
             sum(runtime.compensation_count for runtime in self.jobs.values()) / max_comp,
             mandatory_compensation / active_count,
         ]
+        if self.observation_profile == "compact14":
+            return observation
+
+        remaining_job_workloads = []
+        for job in self.instance.jobs:
+            start = self.jobs[job.job_id].next_operation
+            remaining_job_workloads.append(
+                sum(
+                    self._minimum_operation_durations[
+                        (job.job_id, operation.operation_id)
+                    ]
+                    for operation in job.operations[start:]
+                )
+            )
+        remaining_total_workload = sum(remaining_job_workloads)
+        dispatchable_jobs = sum(
+            not runtime.busy
+            and (operation := self._operation(job_id)) is not None
+            and self.check_process_readiness(job_id)
+            and not self._needs_compensation(job_id)
+            and any(
+                self.ledger.is_available(machine_id, self.current_time)
+                for machine_id in operation.machines
+            )
+            for job_id, runtime in self.jobs.items()
+        )
+        observation.extend(
+            [
+                remaining_total_workload
+                / max(1e-9, self._initial_total_workload),
+                max(remaining_job_workloads, default=0.0)
+                / max(1e-9, self._initial_max_job_workload),
+                max(availability_gaps, default=0.0)
+                / max(1.0, self._duration_scale),
+                float(np.std(availability_gaps))
+                / max(1.0, self._duration_scale),
+                dispatchable_jobs / job_count,
+            ]
+        )
+        return observation
 
     def _minimum_compensation_duration(self, job_id: str) -> float:
         spec = self.instance.compensation
@@ -989,6 +1090,21 @@ class DeformationFJSPEnv:
     def get_action_features(self, actions: list[Action] | None = None) -> list[list[float]]:
         selected = self.get_valid_actions() if actions is None else actions
         features: list[list[float]] = []
+        fastest_durations: dict[tuple[str, ActionType], float] = {}
+        machine_candidate_counts: dict[str, int] = {}
+        if self.action_feature_profile == "enhanced25":
+            for candidate in selected:
+                if candidate.job_id is not None:
+                    key = (candidate.job_id, candidate.kind)
+                    fastest_durations[key] = min(
+                        candidate.duration,
+                        fastest_durations.get(key, candidate.duration),
+                    )
+                if candidate.machine_id is not None:
+                    machine_candidate_counts[candidate.machine_id] = (
+                        machine_candidate_counts.get(candidate.machine_id, 0) + 1
+                    )
+        job_count = max(1, len(self.instance.jobs))
         for action in selected:
             kind = [float(action.kind is value) for value in ActionType]
             if action.job_id is None:
@@ -1068,7 +1184,7 @@ class DeformationFJSPEnv:
                 if action.kind is ActionType.STRESS_RELIEF
                 else 0.0
             )
-            features.append(
+            row = (
                 kind
                 + [
                     action.duration / self._duration_scale,
@@ -1096,6 +1212,30 @@ class DeformationFJSPEnv:
                     self._machine_utilization(action.machine_id),
                 ]
             )
+            if self.action_feature_profile == "enhanced25":
+                fastest = fastest_durations[(action.job_id, action.kind)]
+                start = runtime.next_operation
+                remaining_workload = sum(
+                    self._minimum_operation_durations[
+                        (action.job_id, item.operation_id)
+                    ]
+                    for item in job.operations[start:]
+                )
+                row.extend(
+                    [
+                        fastest / max(1e-9, action.duration),
+                        remaining_workload
+                        / max(
+                            1e-9,
+                            self._initial_job_workloads[action.job_id],
+                        ),
+                        machine_candidate_counts.get(action.machine_id, 0)
+                        / job_count,
+                        self.remaining_dwell(action.job_id)
+                        / max(1.0, self._duration_scale),
+                    ]
+                )
+            features.append(row)
         return features
 
     def get_schedule(self) -> list[dict[str, Any]]:

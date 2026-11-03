@@ -9,6 +9,69 @@ from tests.helpers import choose, tiny_instance
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_enhanced_action_features_add_relative_workload_and_pressure(self) -> None:
+        env = ResidualStressFJSPEnv(
+            tiny_instance(jobs=2), action_feature_profile="enhanced25"
+        )
+        _, info = env.reset()
+        actions = info["valid_actions"]
+        rows = info["action_features"]
+
+        self.assertEqual(env.ACTION_FEATURE_DIM, 25)
+        self.assertTrue(all(len(row) == 25 for row in rows))
+        m1_index = next(
+            index
+            for index, action in enumerate(actions)
+            if action.job_id == "J1" and action.machine_id == "M1"
+        )
+        m2_index = next(
+            index
+            for index, action in enumerate(actions)
+            if action.job_id == "J1" and action.machine_id == "M2"
+        )
+        m1 = dict(zip(env.ACTION_FEATURE_NAMES, rows[m1_index]))
+        m2 = dict(zip(env.ACTION_FEATURE_NAMES, rows[m2_index]))
+
+        self.assertAlmostEqual(m1["relative_fastest_duration_score"], 1.0)
+        self.assertAlmostEqual(
+            m2["relative_fastest_duration_score"], 1.0 / 1.5
+        )
+        self.assertAlmostEqual(m1["job_remaining_workload_ratio"], 1.0)
+        self.assertAlmostEqual(m1["machine_candidate_pressure"], 1.0)
+        self.assertAlmostEqual(m1["normalized_remaining_dwell_time"], 0.0)
+
+    def test_enhanced_observation_adds_workload_bottleneck_and_dispatchability(self) -> None:
+        env = ResidualStressFJSPEnv(
+            tiny_instance(jobs=2), observation_profile="enhanced19"
+        )
+        observation, _ = env.reset()
+        state = dict(zip(env.OBSERVATION_NAMES, observation))
+
+        self.assertEqual(env.OBSERVATION_DIM, 19)
+        self.assertEqual(len(observation), 19)
+        self.assertAlmostEqual(state["remaining_processing_load_ratio"], 1.0)
+        self.assertAlmostEqual(state["max_job_remaining_load_ratio"], 1.0)
+        self.assertAlmostEqual(state["max_machine_availability_gap"], 0.0)
+        self.assertAlmostEqual(state["machine_availability_gap_std"], 0.0)
+        self.assertAlmostEqual(state["dispatchable_job_ratio"], 1.0)
+
+        observation, *_ = env.step(choose(env, "NORMAL", job_id="J1", machine="M1"))
+        state = dict(zip(env.OBSERVATION_NAMES, observation))
+        self.assertGreater(state["max_machine_availability_gap"], 0.0)
+        self.assertGreater(state["machine_availability_gap_std"], 0.0)
+        self.assertAlmostEqual(state["dispatchable_job_ratio"], 0.5)
+
+    def test_observation_profile_rejects_unknown_name(self) -> None:
+        with self.assertRaises(ValueError):
+            ResidualStressFJSPEnv(
+                tiny_instance(), observation_profile="unknown"
+            )
+
+        with self.assertRaises(ValueError):
+            ResidualStressFJSPEnv(
+                tiny_instance(), action_feature_profile="unknown"
+            )
+
     def test_graph_state_matches_nodes_edges_and_candidates(self) -> None:
         env = ResidualStressFJSPEnv(load_instance("data/examples/synthetic_train.json"))
         _, info = env.reset(seed=3)

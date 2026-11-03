@@ -52,12 +52,20 @@ def _evaluate_validation_set(
     model: nn.Module,
     *,
     seed: int,
+    observation_profile: str,
+    action_feature_profile: str,
 ) -> tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]:
     results: list[dict[str, Any]] = []
     schedules: dict[str, list[dict[str, Any]]] = {}
     for index, instance in enumerate(instances):
         metrics, schedule = evaluate_model(
-            ResidualStressFJSPEnv(instance), model, seed=seed + index
+            ResidualStressFJSPEnv(
+                instance,
+                observation_profile=observation_profile,
+                action_feature_profile=action_feature_profile,
+            ),
+            model,
+            seed=seed + index,
         )
         results.append({"name": instance.name, "metrics": metrics})
         schedules[instance.name] = schedule
@@ -98,6 +106,10 @@ def _checkpoint_payload(
         "hidden_dim": int(config.get("hidden_dim", 128)),
         "observation_dim": observation_dim,
         "action_feature_dim": action_feature_dim,
+        "observation_profile": str(config.get("observation_profile", "compact14")),
+        "action_feature_profile": str(
+            config.get("action_feature_profile", "compact21")
+        ),
         "model_type": str(getattr(model, "model_type", "mlp")),
         "model_kwargs": dict(getattr(model, "checkpoint_kwargs", {})),
         "config": config,
@@ -122,7 +134,15 @@ def train(
     if train_source is None:
         raise ValueError("config needs train_instances or train_instance")
     train_instances = load_instances(train_source)
-    env = ResidualStressFJSPEnv(train_instances[0])
+    observation_profile = str(config.get("observation_profile", "compact14"))
+    action_feature_profile = str(
+        config.get("action_feature_profile", "compact21")
+    )
+    env = ResidualStressFJSPEnv(
+        train_instances[0],
+        observation_profile=observation_profile,
+        action_feature_profile=action_feature_profile,
+    )
     observation_dim = env.OBSERVATION_DIM
     action_feature_dim = env.ACTION_FEATURE_DIM
     model_type = str(config.get("model_type", "mlp"))
@@ -258,7 +278,11 @@ def train(
         if position == 0:
             sampler.shuffle(order)
         train_instance = train_instances[order[position]]
-        env = ResidualStressFJSPEnv(train_instance)
+        env = ResidualStressFJSPEnv(
+            train_instance,
+            observation_profile=observation_profile,
+            action_feature_profile=action_feature_profile,
+        )
         episode_buffer, metrics = collect_episode(env, model, seed=seed + episode)
         rollout.extend(episode_buffer)
         total_environment_steps += len(episode_buffer)
@@ -306,6 +330,8 @@ def train(
                 eval_instances,
                 model,
                 seed=int(config.get("eval_seed", seed + 1000)),
+                observation_profile=observation_profile,
+                action_feature_profile=action_feature_profile,
             )
             validation_history.append(
                 {
@@ -361,6 +387,8 @@ def train(
             eval_instances,
             model,
             seed=int(config.get("eval_seed", seed + 1000)),
+            observation_profile=observation_profile,
+            action_feature_profile=action_feature_profile,
         )
     evaluation = latest_evaluation
     validation_schedules = latest_schedules
