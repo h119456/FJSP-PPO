@@ -21,7 +21,23 @@
 
 最小停留时间不再作为工序输入。环境统一使用 `minimum_deformation_ratio=0.5`，根据上一道已完成工序的增长率动态计算 `t_min=ln(2)/B`；因此达到最小停留时间时严格满足 `D(t_min)=0.5A`。当前数据的计算结果为2.781～8.654个时间单位。
 
-环境语义版本为7。版本6删除了“补偿候选阈值+逐工序硬上限”的双阈值设计，改用单一强制补偿阈值；版本7进一步把全局State从21维精简到14维、候选动作特征从23维精简到21维，并修复已完工工件继续污染停留和变形统计的问题。旧Checkpoint不能用于当前语义，必须重新训练。
+环境语义版本为7。版本6删除了“补偿候选阈值+逐工序硬上限”的双阈值设计，改用单一强制补偿阈值；版本7引入14维基础State、21维基础动作特征，并修复已完工工件继续污染停留和变形统计的问题。当前默认使用 `unified23`：14维基础统计 + 5维负载/派工统计 + 4维动态故障统计；静态 dataset 的后4维恒为零。旧语义Checkpoint不能用于当前语义；评估时还需要使用Checkpoint记录的state/action profile。
+
+## MLP 与 GNN 公平对比
+
+原 `dataset.json` 和 `dataset_gnn_pilot.json` 的 batch 与更新频率不同，不适合直接作为统一训练设置下的对比。新增配对配置使用相同的 state23/action21、hidden_dim=128、2000 episodes、global batch64、每10 episodes更新，以及相同的优化器参数、随机种子与验证规则。
+
+```bash
+conda activate datascience
+cd ~/VLA/FJSP-PPO-cloud
+bash scripts/train_dataset_comparison.sh
+```
+
+每个模型的一次训练同时使用GPU 0–7进行DDP训练，满批每卡8个样本、全局mini-batch为64；全局episode数保持2000。MLP和GNN依次运行。静态学习率与MLP多阶段训练一致，从 `3e-4` 降至 `5e-5`。state23中的4个动态特征、GNN节点13维中的2个动态特征在静态数据上保持0。
+
+每次新训练自动在 `/root/VLA/FJSP-PPO-cloud/outputs` 下创建独立时间戳目录，终端打印 `run_directory=...`，保存 `checkpoints/best.pt`、`latest.pt`、`final.pt` 及每500回合快照。最终用实际运行目录下的best模型评估测试集，命令见 `docs/parameter-spec.md`。后续动态学习使用对应的 `dataset_compare_mlp_dynamic.json` 或 `dataset_compare_gnn_dynamic.json`，以 `--initialize-from` 加载静态best模型，无需改变输入维度。
+
+这是现有完整方案的对比：GNN 额外读取图信息，参数量约为 MLP 的10.93倍，不能将差异全部归因于网络层类型。以相同配对 seed 至少重复3次，汇报有效解比例、目标均值与标准差、makespan、独立成本、实际决策步数和耗时。先用验证集选择 `best.pt`，再评估全部20个测试实例；`model.pt` 是最后一轮模型。完整参数与复现实验命令见 `docs/parameter-spec.md`。
 
 ## 直接训练
 
@@ -44,14 +60,14 @@ python -m ppo_rs.train --config configs/dataset.json
 - 每500个episode保存一个永久快照；
 - 训练结束保存 `final.pt`，同时保留兼容入口 `model.pt`。
 
-Checkpoint位于 `outputs/dataset_run5/checkpoints/`。可以修改 `configs/dataset.json` 中的相应参数。
+新CLI运行会在所配置output_dir下创建独立时间戳目录，Checkpoint位于其 `checkpoints/` 下；原 `outputs/dataset_run5/` 作为输出根目录。可以修改 `configs/dataset.json` 中的相应参数。
 
 ## 最终测试
 
 训练完成后在20个未参与训练和验证的实例上评估。下面给出单个测试实例的命令示例：
 
 ```powershell
-python -m ppo_rs.evaluate --instance data/dataset/test/instance_01.json --checkpoint outputs/dataset_run5/model.pt --output-dir outputs/test_01
+python -m ppo_rs.evaluate --instance data/dataset/test/instance_01.json --checkpoint outputs/dataset_run5/<运行目录>/model.pt --output-dir outputs/test_01
 ```
 
 ## 重新生成

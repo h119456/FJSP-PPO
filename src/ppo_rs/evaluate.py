@@ -11,6 +11,7 @@ from ppo_rs import load_instance
 from ppo_rs.baselines import BASELINES, run_baseline
 from ppo_rs.cli_utils import choose_device, write_json
 from ppo_rs.environment import ResidualStressFJSPEnv
+from ppo_rs.environment.checkpoint_semantics import check_dynamic_input_semantics
 from ppo_rs.evaluation import evaluate_model, plot_gantt
 from ppo_rs.models import build_model_from_checkpoint
 
@@ -45,6 +46,7 @@ def main() -> None:
                 "checkpoint environment semantics are incompatible: "
                 f"checkpoint={checkpoint_version}, current={current_version}; retrain the model"
             )
+        check_dynamic_input_semantics(checkpoint, dynamic=bool(instance.dynamic_events))
         model = build_model_from_checkpoint(checkpoint, device)
         observation_profile = str(
             checkpoint.get(

@@ -18,6 +18,7 @@ from ppo_rs import load_instances  # noqa: E402
 from ppo_rs.baselines import BASELINES, run_baseline  # noqa: E402
 from ppo_rs.cli_utils import choose_device, write_json  # noqa: E402
 from ppo_rs.environment import ResidualStressFJSPEnv  # noqa: E402
+from ppo_rs.environment.checkpoint_semantics import check_dynamic_input_semantics  # noqa: E402
 from ppo_rs.evaluation import evaluate_model  # noqa: E402
 from ppo_rs.models import build_model_from_checkpoint  # noqa: E402
 
@@ -32,6 +33,22 @@ def _load_model(path: Path, device: torch.device) -> tuple[torch.nn.Module, dict
         )
     model = build_model_from_checkpoint(checkpoint, device)
     return model, checkpoint
+
+
+def _checkpoint_profiles(checkpoint: dict[str, Any]) -> dict[str, str]:
+    config = checkpoint.get("config", {})
+    return {
+        "observation_profile": str(
+            checkpoint.get(
+                "observation_profile", config.get("observation_profile", "compact14")
+            )
+        ),
+        "action_feature_profile": str(
+            checkpoint.get(
+                "action_feature_profile", config.get("action_feature_profile", "compact21")
+            )
+        ),
+    }
 
 
 def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -98,11 +115,19 @@ def main() -> None:
     checkpoint_metadata: dict[str, Any] = {}
     for name, path in args.checkpoint:
         model, checkpoint = _load_model(path, device)
+        check_dynamic_input_semantics(checkpoint, dynamic=any(i.dynamic_events for i in instances))
         models[name] = model
         checkpoint_metadata[name] = {
             "path": str(path),
+            "dynamic_input_semantics_version": checkpoint.get("dynamic_input_semantics_version"),
+            "evaluation_dynamic_input_semantics_version": ResidualStressFJSPEnv.DYNAMIC_INPUT_SEMANTICS_VERSION,
             "episode": int(checkpoint["episode"]),
             "total_environment_steps": int(checkpoint["total_environment_steps"]),
+            "model_type": str(checkpoint.get("model_type", "mlp")),
+            "observation_dim": int(checkpoint["observation_dim"]),
+            "action_feature_dim": int(checkpoint["action_feature_dim"]),
+            "parameter_count": sum(parameter.numel() for parameter in model.parameters()),
+            **_checkpoint_profiles(checkpoint),
         }
 
     policy_rows: dict[str, list[dict[str, Any]]] = {
@@ -120,7 +145,13 @@ def main() -> None:
             instance_result["policies"][name] = metrics
         for name, model in models.items():
             metrics, _ = evaluate_model(
-                ResidualStressFJSPEnv(instance), model, seed=args.seed + index
+                ResidualStressFJSPEnv(
+                    instance,
+                    observation_profile=checkpoint_metadata[name]["observation_profile"],
+                    action_feature_profile=checkpoint_metadata[name]["action_feature_profile"],
+                ),
+                model,
+                seed=args.seed + index,
             )
             metrics["policy"] = name
             policy_rows[name].append(metrics)

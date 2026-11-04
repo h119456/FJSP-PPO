@@ -58,6 +58,7 @@ class DeformationFJSPEnv:
     """
 
     ENVIRONMENT_SEMANTICS_VERSION = 7
+    DYNAMIC_INPUT_SEMANTICS_VERSION = 2
 
     COMPACT_OBSERVATION_NAMES = (
         "normalized_time",
@@ -231,6 +232,18 @@ class DeformationFJSPEnv:
         self._initial_max_job_workload = max(
             self._initial_job_workloads.values(), default=1.0
         )
+        maximum_auxiliary_cost = max(
+            instance.stress_relief.cost, instance.compensation.cost
+        )
+        self._cost_scale = maximum_auxiliary_cost if maximum_auxiliary_cost > 0 else 1.0
+        self._rng = random.Random()
+        self.reset()
+
+    def _refresh_visible_scales(self) -> None:
+        """Normalize policy inputs using only jobs already observable now."""
+        instance = self.instance
+        visible_jobs = self._active_job_specs()
+        operations = [operation for job in visible_jobs for operation in job.operations]
         self._deformation_scale = max(
             (
                 operation.deformation_scale
@@ -247,14 +260,9 @@ class DeformationFJSPEnv:
             )
             for operation in operations
         )
-        maximum_auxiliary_cost = max(
-            instance.stress_relief.cost,
-            instance.compensation.cost,
-        )
-        self._cost_scale = maximum_auxiliary_cost if maximum_auxiliary_cost > 0 else 1.0
         durations = [
             duration
-            for job in instance.jobs
+            for job in visible_jobs
             for operation in job.operations
             for duration in operation.machines.values()
         ]
@@ -273,13 +281,10 @@ class DeformationFJSPEnv:
                 if operation.deformation_rate is not None
                 else instance.physics.default_deformation_rate
             )
-            for job in instance.jobs
+            for job in visible_jobs
             for operation in job.operations[:-1]
         ]
         self._duration_scale = max(durations, default=1.0)
-        self._initialize_graph_schema()
-        self._rng = random.Random()
-        self.reset()
 
     def _active_job_specs(self) -> list[Any]:
         """Return only jobs currently visible to the policy."""
@@ -434,6 +439,7 @@ class DeformationFJSPEnv:
             (self._initial_job_workloads[job_id] for job_id in self.jobs),
             default=1.0,
         )
+        self._refresh_visible_scales()
         self._initialize_graph_schema()
         self.running: list[_RunningEvent] = []
         # Populated by the dynamic-event transition layer. Keeping these fields
@@ -647,12 +653,12 @@ class DeformationFJSPEnv:
                 )
         return actions
 
-    def _next_relevant_time(self) -> float | None:
+    def _next_relevant_time(self, *, include_hidden: bool = True) -> float | None:
         candidates = [event.end for event in self.running if event.end > self.current_time + 1e-9]
         candidates.extend(
             event.time
             for event in self._pending_dynamic_events
-            if event.time > self.current_time + 1e-9
+            if include_hidden and event.time > self.current_time + 1e-9
         )
         candidates.extend(
             repair_until
@@ -675,12 +681,20 @@ class DeformationFJSPEnv:
         relief = self._stress_relief_actions()
         compensation = self._compensation_actions()
         actions = normal + relief + compensation
-        future = self._next_relevant_time()
-        # WAIT advances to the next real event. It remains available even when
-        # normal work is legal, allowing the policy to choose intentional idle
-        # time without introducing arbitrary fixed time steps.
-        if future is not None:
-            actions.append(Action(ActionType.WAIT, duration=future - self.current_time))
+        if self.instance.dynamic_events:
+            # WAIT requests a public horizon; an external event can interrupt it.
+            # Neither its presence nor its features consult the private queue.
+            future = self._next_relevant_time(include_hidden=False)
+            if future is not None:
+                actions.append(Action(ActionType.WAIT, duration=future - self.current_time))
+            elif normal:
+                # With dispatchable work but no public event, wait one visible
+                # processing interval. This is positive even on no-event traces.
+                actions.append(Action(ActionType.WAIT, duration=min(a.duration for a in normal)))
+        else:
+            future = self._next_relevant_time()
+            if future is not None:
+                actions.append(Action(ActionType.WAIT, duration=future - self.current_time))
         return actions
 
     def step(
@@ -700,6 +714,9 @@ class DeformationFJSPEnv:
         self.decision_count += 1
         if selected.kind is ActionType.WAIT:
             next_time = self._next_relevant_time()
+            if self.instance.dynamic_events:
+                horizon = self.current_time + selected.duration
+                next_time = min(horizon, next_time) if next_time is not None else horizon
             if next_time is None:
                 self._truncated = True
             else:
@@ -808,8 +825,9 @@ class DeformationFJSPEnv:
         self.jobs[job_id] = _JobRuntime(anchor_time=event.time)
         self.job_release_times[job_id] = event.time
         self.dynamic_event_log.append(event.to_dict())
-        # Node IDs are local to each graph snapshot, so rebuilding after a
-        # release exposes the new job without leaking it beforehand.
+        # Both normalization scales and topology may include this job only
+        # after the release has become observable.
+        self._refresh_visible_scales()
         self._initialize_graph_schema()
 
     def _break_machine(self, event: DynamicEvent) -> None:
@@ -1096,7 +1114,7 @@ class DeformationFJSPEnv:
         )
         observation.extend(
             [
-                len(active_repairs) / max(1, len(self._production_machines)),
+                len(active_repairs) / max(1, len(self._known_production_machines())),
                 (
                     sum(remaining_repairs) / len(remaining_repairs)
                     if remaining_repairs
@@ -1110,13 +1128,30 @@ class DeformationFJSPEnv:
         )
         return observation
 
+    def _known_production_machines(self) -> frozenset[str]:
+        if not self.instance.dynamic_events:
+            return self._production_machines
+        # Inventory and auxiliary roles are public. Shared-role machines become
+        # known as production resources through a visible route or a breakdown.
+        return (
+            frozenset(self.instance.machines)
+            - frozenset(self.instance.stress_relief.machines)
+            - frozenset(self.instance.compensation.machines)
+        ) | frozenset(
+            machine
+            for job in self._active_job_specs()
+            for operation in job.operations
+            for machine in operation.machines
+        ) | frozenset(self.machine_repair_until)
+
     def _active_machine_repairs(self) -> dict[str, float]:
         """Return observable remaining repair times for production machines."""
 
+        known_machines = self._known_production_machines()
         return {
             machine_id: repair_until - self.current_time
             for machine_id, repair_until in self.machine_repair_until.items()
-            if machine_id in self._production_machines
+            if machine_id in known_machines
             and repair_until > self.current_time + 1e-9
         }
 

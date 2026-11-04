@@ -42,7 +42,8 @@ class DynamicEnvironmentTests(unittest.TestCase):
         self.assertTrue(all(action.job_id != "J2" for action in info["valid_actions"]))
         self.assertAlmostEqual(state["remaining_processing_load_ratio"], 1.0)
 
-        observation, *_ = env.step(choose(env, "WAIT"))
+        while "J2" not in env.jobs:
+            observation, *_ = env.step(choose(env, "WAIT"))
         state = dict(zip(env.OBSERVATION_NAMES, observation))
         self.assertEqual(env.current_time, 2.0)
         self.assertEqual(set(env.jobs), {"J1", "J2"})

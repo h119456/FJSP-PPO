@@ -6,7 +6,9 @@ from dataclasses import dataclass
 from typing import Any
 
 import torch
+import torch.distributed as dist
 from torch import nn
+from torch.nn.parallel import DistributedDataParallel
 
 from ppo_rs.environment.fjsp_env import ResidualStressFJSPEnv
 from ppo_rs.models import batch_graph_states
@@ -27,11 +29,47 @@ class PPOConfig:
     max_grad_norm: float = 0.5
 
 
+class _ActionEvaluation(nn.Module):
+    """Expose the shared policy evaluation through DDP's forward entry point."""
+
+    def __init__(self, model: nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(
+        self,
+        observations: torch.Tensor,
+        action_features: torch.Tensor,
+        action_masks: torch.Tensor,
+        choices: torch.Tensor,
+        *,
+        graph_batch=None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return self.model.evaluate_actions(
+            observations, action_features, action_masks, choices,
+            graph_batch=graph_batch,
+        )
+
+
 class PPO:
     def __init__(self, model: nn.Module, config: PPOConfig) -> None:
         self.model = model
         self.config = config
         self.entropy_coef = config.entropy_coef
+        self.world_size = dist.get_world_size() if dist.is_initialized() else 1
+        self.rank = dist.get_rank() if dist.is_initialized() else 0
+        self._distributed_evaluator = None
+        if self.world_size > 1:
+            # The original model remains available for local rollout collection
+            # and unprefixed checkpoints. Only differentiable PPO evaluation
+            # goes through DDP so its gradient synchronization hooks are used.
+            device = model.device
+            device_ids = [device.index] if device.type == "cuda" else None
+            self._distributed_evaluator = DistributedDataParallel(
+                _ActionEvaluation(model),
+                device_ids=device_ids,
+                find_unused_parameters=bool(getattr(model, "requires_graph", False)),
+            )
         self.optimizer = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
 
     @property
@@ -50,7 +88,12 @@ class PPO:
         self.entropy_coef = float(value)
 
     def update(self, buffer: RolloutBuffer) -> dict[str, float]:
-        """Run multi-epoch clipped policy/value updates over one rollout."""
+        """Update using a global rollout replicated identically on every rank.
+
+        ``mini_batch_size`` is the global sample count, rather than a per-rank
+        size. Padding on uneven or final batches contributes zero loss; its
+        gradients therefore equal the single-process global batch mean.
+        """
 
         data = buffer.tensors(
             device=self.model.device,
@@ -63,9 +106,26 @@ class PPO:
         sample_count = len(buffer)
         totals = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "updates": 0.0}
         for _ in range(self.config.ppo_epochs):
-            permutation = torch.randperm(sample_count, device=self.model.device)
+            if self.rank == 0:
+                permutation = torch.randperm(sample_count, device=self.model.device)
+            else:
+                permutation = torch.empty(sample_count, dtype=torch.long, device=self.model.device)
+            if self.world_size > 1:
+                dist.broadcast(permutation, src=0)
             for start in range(0, sample_count, self.config.mini_batch_size):
                 indices = permutation[start : start + self.config.mini_batch_size]
+                global_count = indices.numel()
+                valid_samples = None
+                if self.world_size > 1:
+                    local_count = (global_count + self.world_size - 1) // self.world_size
+                    positions = torch.arange(
+                        self.rank * local_count, (self.rank + 1) * local_count,
+                        device=self.model.device,
+                    )
+                    valid_samples = positions < global_count
+                    # Every rank executes a real forward/backward, even if a
+                    # tiny final batch has fewer samples than there are GPUs.
+                    indices = indices[positions.remainder(global_count)]
                 graph_batch = None
                 if bool(getattr(self.model, "requires_graph", False)):
                     selected_graphs = [
@@ -79,7 +139,8 @@ class PPO:
                         action_slots=data["action_features"].shape[1],
                         device=self.model.device,
                     )
-                log_probs, entropy, values = self.model.evaluate_actions(
+                evaluator = self._distributed_evaluator or self.model.evaluate_actions
+                log_probs, entropy, values = evaluator(
                     data["observations"][indices],
                     data["action_features"][indices],
                     data["action_masks"][indices],
@@ -91,9 +152,22 @@ class PPO:
                 clipped = torch.clamp(
                     ratio, 1.0 - self.config.clip_ratio, 1.0 + self.config.clip_ratio
                 ) * advantages[indices]
-                policy_loss = -torch.minimum(raw, clipped).mean()
-                value_loss = nn.functional.mse_loss(values, data["returns"][indices])
-                entropy_mean = entropy.mean()
+                policy_samples = -torch.minimum(raw, clipped)
+                value_samples = nn.functional.mse_loss(
+                    values, data["returns"][indices], reduction="none"
+                )
+                if valid_samples is None:
+                    policy_loss = policy_samples.mean()
+                    value_loss = value_samples.mean()
+                    entropy_mean = entropy.mean()
+                else:
+                    weight = valid_samples.to(policy_samples.dtype)
+                    # DDP averages gradients over world_size ranks. Scaling
+                    # each masked local sum compensates for that averaging.
+                    scale = self.world_size / global_count
+                    policy_loss = (policy_samples * weight).sum() * scale
+                    value_loss = (value_samples * weight).sum() * scale
+                    entropy_mean = (entropy * weight).sum() * scale
                 loss = (
                     policy_loss
                     + self.config.value_coef * value_loss
@@ -103,9 +177,14 @@ class PPO:
                 loss.backward()
                 nn.utils.clip_grad_norm_(self.model.parameters(), self.config.max_grad_norm)
                 self.optimizer.step()
-                totals["policy_loss"] += float(policy_loss.detach().item())
-                totals["value_loss"] += float(value_loss.detach().item())
-                totals["entropy"] += float(entropy_mean.detach().item())
+                metrics = torch.stack([
+                    policy_loss.detach(), value_loss.detach(), entropy_mean.detach()
+                ])
+                if self.world_size > 1:
+                    dist.all_reduce(metrics)
+                    metrics /= self.world_size
+                for key, value in zip(("policy_loss", "value_loss", "entropy"), metrics.tolist()):
+                    totals[key] += float(value)
                 totals["updates"] += 1.0
         count = max(1.0, totals.pop("updates"))
         return {key: value / count for key, value in totals.items()}

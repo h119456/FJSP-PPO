@@ -2,7 +2,7 @@
   "train_instances": "data/dataset2/train",
   "eval_instances": "data/dataset2/validation",
   "test_instances": "data/dataset2/test",
-  "output_dir": "outputs/dataset2_gnn_run1",
+  "output_dir": "/root/VLA/FJSP-PPO-cloud/outputs/20261104_gnn_attention_jingtai_data2",
   "seed": 7,
   "eval_seed": 1007,
   "episodes": 20000,
@@ -21,12 +21,14 @@
   "entropy_coef": 0.02,
   "final_entropy_coef": 0.005,
   "ppo_epochs": 4,
-  "mini_batch_size": 32,
+  "mini_batch_size": 64,
   "episodes_per_update": 10,
   "validation_interval": 500,
-  "latest_checkpoint_interval": 10,
+  "latest_checkpoint_interval": 100,
   "checkpoint_interval": 5000,
   "max_grad_norm": 0.5,
   "enable_plots": false,
-  "device": "auto"
+  "device": "cuda",
+  "distributed_world_size": 8,
+  "output_dir_mode": "existing"
 }

@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from ppo_rs import load_instances  # noqa: E402
 from ppo_rs.environment import ResidualStressFJSPEnv  # noqa: E402
+from ppo_rs.environment.checkpoint_semantics import check_dynamic_input_semantics  # noqa: E402
 from ppo_rs.evaluation import evaluate_model  # noqa: E402
 from ppo_rs.models import build_model_from_checkpoint  # noqa: E402
 
@@ -120,6 +121,9 @@ def main() -> None:
         checkpoint = torch.load(
             checkpoint_path, map_location="cpu", weights_only=False
         )
+        check_dynamic_input_semantics(
+            checkpoint, dynamic=any(i.dynamic_events for source in splits.values() for i in load_instances(source))
+        )
         model = build_model_from_checkpoint(checkpoint, torch.device("cpu"))
         profile = str(
             checkpoint.get(
@@ -139,6 +143,8 @@ def main() -> None:
         )
         summary[run_label] = {
             "checkpoint": checkpoint_path,
+            "dynamic_input_semantics_version": checkpoint.get("dynamic_input_semantics_version"),
+            "evaluation_dynamic_input_semantics_version": ResidualStressFJSPEnv.DYNAMIC_INPUT_SEMANTICS_VERSION,
             "episode": int(checkpoint["episode"]),
             "observation_profile": profile,
             "observation_dim": int(checkpoint["observation_dim"]),
