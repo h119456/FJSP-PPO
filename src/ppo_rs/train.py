@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import random
+import time
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -149,21 +150,64 @@ def _evaluate_validation_set(
     observation_profile: str,
     action_feature_profile: str,
 ) -> tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]:
-    results: list[dict[str, Any]] = []
-    schedules: dict[str, list[dict[str, Any]]] = {}
-    for index, instance in enumerate(instances):
-        metrics, schedule = evaluate_model(
-            ResidualStressFJSPEnv(
-                instance,
-                observation_profile=observation_profile,
-                action_feature_profile=action_feature_profile,
-            ),
-            model,
-            seed=seed + index,
-        )
-        results.append({"name": instance.name, "metrics": metrics})
-        schedules[instance.name] = schedule
-    return _mean_validation_metrics(results), schedules
+    """Evaluate disjoint instance shards, then restore their original order.
+
+    All ranks participate, including ranks with no assigned instances. Policy
+    evaluation is deterministic and environment resets use their own RNG, so
+    distributing validation does not consume the training policy's RNG stream.
+    """
+
+    validation_started = time.perf_counter()
+    rank, world_size = _distributed_context()
+    local_results: list[tuple[int, dict[str, Any], list[dict[str, Any]]]] = []
+    error = None
+    try:
+        if not instances:
+            raise ValueError("validation requires at least one instance")
+        for index in range(rank, len(instances), world_size):
+            instance = instances[index]
+            metrics, schedule = evaluate_model(
+                ResidualStressFJSPEnv(
+                    instance,
+                    observation_profile=observation_profile,
+                    action_feature_profile=action_feature_profile,
+                ),
+                model,
+                seed=seed + index,
+            )
+            local_results.append((index, {"name": instance.name, "metrics": metrics}, schedule))
+    except Exception as exc:
+        if world_size == 1:
+            raise
+        error = f"{type(exc).__name__}: {exc}"
+
+    if world_size > 1:
+        # Propagate failures in the same collective as the results. Raising on
+        # only one rank before this point would leave its peers waiting forever.
+        gathered: list[Any] = [None] * world_size
+        dist.all_gather_object(gathered, {"error": error, "results": local_results})
+        errors = [f"rank{index}: {item['error']}" for index, item in enumerate(gathered) if item["error"]]
+        if errors:
+            raise RuntimeError("validation failed: " + "; ".join(errors))
+        ordered = sorted((row for item in gathered for row in item["results"]), key=lambda row: row[0])
+    else:
+        ordered = local_results
+    if [row[0] for row in ordered] != list(range(len(instances))):
+        raise RuntimeError("validation did not evaluate every instance exactly once")
+    results = [row[1] for row in ordered]
+    schedules = {row[1]["name"]: row[2] for row in ordered}
+    aggregate = _mean_validation_metrics(results)
+    # The parallel pass includes construction, schedule extraction, result
+    # gathering and aggregation. Its wall time is the slowest rank, not the sum
+    # of per-instance episode timings, which may overlap across devices.
+    validation_seconds = time.perf_counter() - validation_started
+    if world_size > 1:
+        timing_device = getattr(model, "device", "cpu") if dist.get_backend() == "nccl" else "cpu"
+        duration = torch.tensor(validation_seconds, dtype=torch.float64, device=timing_device)
+        dist.all_reduce(duration, op=dist.ReduceOp.MAX)
+        validation_seconds = float(duration.item())
+    aggregate["validation_wall_seconds"] = validation_seconds
+    return aggregate, schedules
 
 
 def _is_valid_evaluation(evaluation: dict[str, Any]) -> bool:
@@ -473,6 +517,11 @@ def train(
                 "objective": float(metrics["objective"]),
                 "reward": float(sum(episode_buffer.rewards)),
                 "episode_steps": len(episode_buffer),
+                "terminated": bool(metrics["terminated"]),
+                "truncated": bool(metrics["truncated"]),
+                "episode_wall_seconds": float(metrics["episode_wall_seconds"]),
+                "policy_inference_seconds": float(metrics["policy_inference_seconds"]),
+                "graph_construction_seconds": float(metrics["graph_construction_seconds"]),
                 "total_environment_steps": total_environment_steps,
                 "policy_loss": None,
                 "value_loss": None,
@@ -498,8 +547,23 @@ def train(
             initial_entropy_coef
             + schedule_progress * (final_entropy_coef - initial_entropy_coef)
         )
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        update_started = time.perf_counter()
         losses = algorithm.update(rollout)
+        if device.type == "cuda":
+            torch.cuda.synchronize(device)
+        update_seconds = time.perf_counter() - update_started
+        if world_size > 1:
+            # Wall time of the shared update is determined by the slowest rank;
+            # summing ranks would misrepresent parallel work as elapsed time.
+            duration = torch.tensor(update_seconds, dtype=torch.float64, device=device)
+            dist.all_reduce(duration, op=dist.ReduceOp.MAX)
+            update_seconds = float(duration.item())
         row.update(losses)
+        # One optimizer update belongs to a whole rollout block, not each job
+        # instance. Record it only on the final episode row of that block.
+        row["ppo_update_wall_seconds"] = update_seconds
         row["learning_rate"] = algorithm.learning_rate
         row["entropy_coef"] = algorithm.entropy_coef
         row["rollout_steps"] = len(rollout)
@@ -507,17 +571,13 @@ def train(
 
         validation_due = episode % validation_interval == 0 or episode == episodes
         if validation_due:
-            validation_result = None
-            with _rank_zero_phase():
-                if rank == 0:
-                    validation_result = _evaluate_validation_set(
-                        eval_instances,
-                        model,
-                        seed=int(config.get("eval_seed", seed + 1000)),
-                        observation_profile=observation_profile,
-                        action_feature_profile=action_feature_profile,
-                    )
-            latest_evaluation, latest_schedules = _broadcast_object(validation_result)
+            latest_evaluation, latest_schedules = _evaluate_validation_set(
+                eval_instances,
+                model,
+                seed=int(config.get("eval_seed", seed + 1000)),
+                observation_profile=observation_profile,
+                action_feature_profile=action_feature_profile,
+            )
             validation_history.append(
                 {
                     "episode": episode,
@@ -525,6 +585,10 @@ def train(
                     "objective": float(latest_evaluation["objective"]),
                     "terminated": bool(latest_evaluation["terminated"]),
                     "truncated": bool(latest_evaluation["truncated"]),
+                    "episode_wall_seconds": float(latest_evaluation["episode_wall_seconds"]),
+                    "policy_inference_seconds": float(latest_evaluation["policy_inference_seconds"]),
+                    "graph_construction_seconds": float(latest_evaluation["graph_construction_seconds"]),
+                    "validation_wall_seconds": float(latest_evaluation["validation_wall_seconds"]),
                 }
             )
             if (
@@ -561,6 +625,7 @@ def train(
                 if episode == episodes_per_update or episode % validation_interval == 0 or episode == episodes:
                     validation_text = (
                         f" validation={latest_evaluation['objective']:.4f}"
+                        f" validation_seconds={latest_evaluation['validation_wall_seconds']:.3f}"
                         if validation_due and latest_evaluation is not None
                         else ""
                     )
@@ -568,21 +633,19 @@ def train(
                         f"episode={episode:04d} instance={row['instance']} "
                         f"objective={row['objective']:.4f} "
                         f"rollout_steps={row['rollout_steps']} "
-                        f"policy_loss={row['policy_loss']:.4f}{validation_text}"
+                        f"policy_loss={row['policy_loss']:.4f} "
+                        f"episode_seconds={row['episode_wall_seconds']:.3f} "
+                        f"ppo_update_seconds={row['ppo_update_wall_seconds']:.3f}{validation_text}"
                     )
 
     if latest_evaluation is None or latest_schedules is None:
-        validation_result = None
-        with _rank_zero_phase():
-            if rank == 0:
-                validation_result = _evaluate_validation_set(
-                    eval_instances,
-                    model,
-                    seed=int(config.get("eval_seed", seed + 1000)),
-                    observation_profile=observation_profile,
-                    action_feature_profile=action_feature_profile,
-                )
-        latest_evaluation, latest_schedules = _broadcast_object(validation_result)
+        latest_evaluation, latest_schedules = _evaluate_validation_set(
+            eval_instances,
+            model,
+            seed=int(config.get("eval_seed", seed + 1000)),
+            observation_profile=observation_profile,
+            action_feature_profile=action_feature_profile,
+        )
     evaluation = latest_evaluation
     validation_schedules = latest_schedules
     first_schedule = validation_schedules[eval_instances[0].name]

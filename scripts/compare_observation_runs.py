@@ -53,9 +53,14 @@ def _summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "interrupted_operation_count",
         "total_repair_time",
         "total_interruption_time",
+        "episode_wall_seconds",
+        "policy_inference_seconds",
+        "graph_construction_seconds",
     ):
         if all(key in row for row in rows):
             result[key] = sum(float(row[key]) for row in rows) / count
+    if all("episode_wall_seconds" in row for row in rows):
+        result["total_episode_wall_seconds"] = sum(float(row["episode_wall_seconds"]) for row in rows)
     return result
 
 

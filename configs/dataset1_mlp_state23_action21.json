@@ -1,7 +1,7 @@
 {
-  "train_instances": "data/dataset/train",
-  "eval_instances": "data/dataset/validation",
-  "test_instances": "data/dataset/test",
+  "train_instances": "data/dataset1/static/train",
+  "eval_instances": "data/dataset1/static/validation",
+  "test_instances": "data/dataset1/static/test",
   "output_dir": "outputs/dataset1_unified_state/mlp_23d_action21d",
   "seed": 7,
   "eval_seed": 1007,

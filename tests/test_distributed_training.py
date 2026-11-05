@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 import json
+import math
 from pathlib import Path
 import time
 
@@ -14,6 +15,15 @@ from ppo_rs import load_instance
 from ppo_rs.environment import ResidualStressFJSPEnv
 from ppo_rs.models import build_actor_critic
 from ppo_rs.train import _episode_order, _rank_zero_phase, _run_directory, _validate_transfer_schema, train
+
+
+def _assert_episode_timings(metrics: dict) -> None:
+    for key in ("episode_wall_seconds", "policy_inference_seconds", "graph_construction_seconds"):
+        assert math.isfinite(metrics[key]) and metrics[key] >= 0.0
+    assert metrics["episode_wall_seconds"] > 0.0
+    assert metrics["policy_inference_seconds"] > 0.0
+    assert metrics["graph_construction_seconds"] == 0.0  # This worker uses an MLP.
+    assert metrics["episode_wall_seconds"] >= metrics["policy_inference_seconds"]
 
 
 def _training_worker(rank: int, rendezvous: str, output: str) -> None:
@@ -42,7 +52,17 @@ def _training_worker(rank: int, rendezvous: str, output: str) -> None:
         assert len(history) == 4
         assert [int(row["episode"]) for row in history] == [1, 2, 3, 4]
         assert [row["collection_rank"] for row in history] == [0, 1, 0, 1]
+        for row in history:
+            _assert_episode_timings(row)
+            assert row["terminated"] and not row["truncated"]
+            if row["policy_loss"] is None:
+                assert row.get("ppo_update_wall_seconds") is None
+            else:
+                assert math.isfinite(row["ppo_update_wall_seconds"])
+                assert row["ppo_update_wall_seconds"] > 0.0
         assert evaluation["terminated"] and not evaluation["truncated"]
+        _assert_episode_timings(evaluation)
+        assert evaluation["validation_wall_seconds"] >= evaluation["episode_wall_seconds"]
         runs = [path for path in Path(output).iterdir() if path.is_dir()]
         assert len(runs) == 1
         run = runs[0]
@@ -57,13 +77,49 @@ def _training_worker(rank: int, rendezvous: str, output: str) -> None:
         assert checkpoint["total_environment_steps"] == sum(row["episode_steps"] for row in history)
         updates = [row for row in history if row["policy_loss"] is not None]
         assert len(updates) == 2
+        rank_update_times = [None, None]
+        dist.all_gather_object(rank_update_times, [row["ppo_update_wall_seconds"] for row in updates])
+        assert rank_update_times[0] == rank_update_times[1]
         assert updates[0]["learning_rate"] == pytest.approx(3e-4)
         assert updates[-1]["learning_rate"] == pytest.approx(5e-5)
+        assert json.loads((run / "training_history.json").read_text()) == history
+        validation_history = json.loads((run / "validation_history.json").read_text())
+        assert len(validation_history) == 2
+        for row in validation_history:
+            _assert_episode_timings(row)
+            assert row["validation_wall_seconds"] >= row["episode_wall_seconds"]
+        saved_evaluation = json.loads((run / "evaluation.json").read_text())
+        _assert_episode_timings(saved_evaluation)
+        assert saved_evaluation["validation_wall_seconds"] > 0.0
+
+        # A run written by the old code has no timing fields. Resume must retain
+        # that history without inventing measurements for completed episodes.
+        legacy_history = [
+            {key: value for key, value in row.items()
+             if not key.endswith("_seconds") and key not in ("terminated", "truncated")}
+            for row in history
+        ]
+        legacy_validation = [
+            {key: value for key, value in row.items() if not key.endswith("_seconds")}
+            for row in validation_history
+        ]
+        if rank == 0:
+            (run / "training_history.json").write_text(json.dumps(legacy_history))
+            (run / "validation_history.json").write_text(json.dumps(legacy_validation))
+        dist.barrier()
 
         # Resuming reuses the existing run and restores every rank's RNG state.
         config["episodes"] = 6
         _, resumed_history, _ = train(config, resume_from=run / "checkpoints/latest.pt")
         assert len(resumed_history) == 6
+        assert resumed_history[:4] == legacy_history
+        for row in resumed_history[4:]:
+            _assert_episode_timings(row)
+        assert resumed_history[-1]["ppo_update_wall_seconds"] > 0.0
+        resumed_validation = json.loads((run / "validation_history.json").read_text())
+        assert len(resumed_validation) == 3
+        assert resumed_validation[:2] == legacy_validation
+        assert resumed_validation[-1]["validation_wall_seconds"] > 0.0
         assert len([path for path in Path(output).iterdir() if path.is_dir()]) == 1
         with pytest.raises(RuntimeError, match="intentional root failure"):
             with _rank_zero_phase():

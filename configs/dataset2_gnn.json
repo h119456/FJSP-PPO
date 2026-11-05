@@ -1,7 +1,7 @@
 {
-  "train_instances": "data/dataset2/train",
-  "eval_instances": "data/dataset2/validation",
-  "test_instances": "data/dataset2/test",
+  "train_instances": "data/dataset2/static/train",
+  "eval_instances": "data/dataset2/static/validation",
+  "test_instances": "data/dataset2/static/test",
   "output_dir": "/root/VLA/FJSP-PPO-cloud/outputs/20261104_gnn_attention_jingtai_data2",
   "seed": 7,
   "eval_seed": 1007,

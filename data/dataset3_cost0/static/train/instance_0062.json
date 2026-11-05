@@ -1,0 +1,2802 @@
+{
+  "name": "dataset3_train_0062",
+  "synthetic_test_data": true,
+  "machines": [
+    "M1",
+    "M2",
+    "M5",
+    "M6",
+    "M7",
+    "M8",
+    "M9",
+    "M10",
+    "M11",
+    "M12",
+    "M13",
+    "M14",
+    "M15",
+    "M16",
+    "M17",
+    "M3",
+    "M4"
+  ],
+  "jobs": [
+    {
+      "id": "J1",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M17": 1.6,
+            "M9": 1.7
+          },
+          "deformation_scale": 0.394,
+          "deformation_rate": 0.1182
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M1": 2.8,
+            "M16": 4.7
+          },
+          "deformation_scale": 0.39,
+          "deformation_rate": 0.2109
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M12": 2.7,
+            "M14": 2.8,
+            "M13": 1.8,
+            "M9": 2.9,
+            "M6": 3.5
+          },
+          "deformation_scale": 0.263,
+          "deformation_rate": 0.1606
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M11": 3.6,
+            "M8": 3.1
+          },
+          "deformation_scale": 0.258,
+          "deformation_rate": 0.0973
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M12": 3.5,
+            "M1": 4.8,
+            "M16": 4.9,
+            "M6": 3.0,
+            "M10": 3.7
+          },
+          "deformation_scale": 0.344,
+          "deformation_rate": 0.1463
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M2": 1.7,
+            "M17": 1.7,
+            "M10": 4.7,
+            "M14": 3.0
+          },
+          "deformation_scale": 0.38,
+          "deformation_rate": 0.2149
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M2": 1.9,
+            "M12": 2.7,
+            "M15": 1.9
+          },
+          "deformation_scale": 0.313,
+          "deformation_rate": 0.0956
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M11": 2.4,
+            "M8": 3.4
+          },
+          "deformation_scale": 0.287,
+          "deformation_rate": 0.2252
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M5": 3.3,
+            "M11": 4.9
+          },
+          "deformation_scale": 0.336,
+          "deformation_rate": 0.1866
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M17": 2.1,
+            "M16": 3.2,
+            "M10": 3.8,
+            "M11": 1.7,
+            "M12": 2.8
+          },
+          "deformation_scale": 0.31,
+          "deformation_rate": 0.2273
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M5": 1.7,
+            "M16": 1.8,
+            "M11": 3.9,
+            "M8": 3.2
+          },
+          "deformation_scale": 0.444,
+          "deformation_rate": 0.1266
+        }
+      ]
+    },
+    {
+      "id": "J2",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M7": 3.6,
+            "M12": 2.7
+          },
+          "deformation_scale": 0.22,
+          "deformation_rate": 0.2405
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M1": 5.0,
+            "M7": 2.5,
+            "M10": 3.7
+          },
+          "deformation_scale": 0.207,
+          "deformation_rate": 0.1116
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M13": 3.9,
+            "M15": 4.1,
+            "M11": 3.5
+          },
+          "deformation_scale": 0.247,
+          "deformation_rate": 0.1515
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M13": 4.1,
+            "M1": 2.9,
+            "M2": 3.2
+          },
+          "deformation_scale": 0.354,
+          "deformation_rate": 0.1318
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M5": 1.7,
+            "M15": 2.0
+          },
+          "deformation_scale": 0.2,
+          "deformation_rate": 0.1436
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M17": 4.7,
+            "M16": 4.8
+          },
+          "deformation_scale": 0.21,
+          "deformation_rate": 0.2379
+        }
+      ]
+    },
+    {
+      "id": "J3",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M6": 4.0,
+            "M10": 1.9
+          },
+          "deformation_scale": 0.38,
+          "deformation_rate": 0.2357
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M2": 3.5,
+            "M9": 3.3,
+            "M1": 4.3
+          },
+          "deformation_scale": 0.279,
+          "deformation_rate": 0.1914
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M2": 2.6,
+            "M5": 4.3,
+            "M1": 3.5,
+            "M17": 3.9,
+            "M6": 3.8
+          },
+          "deformation_scale": 0.314,
+          "deformation_rate": 0.2022
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M5": 2.9,
+            "M16": 2.3,
+            "M1": 1.9,
+            "M8": 4.3,
+            "M7": 3.7
+          },
+          "deformation_scale": 0.189,
+          "deformation_rate": 0.16
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M10": 1.8,
+            "M9": 3.6
+          },
+          "deformation_scale": 0.438,
+          "deformation_rate": 0.1506
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M17": 3.4,
+            "M10": 2.7,
+            "M12": 4.1,
+            "M2": 1.9
+          },
+          "deformation_scale": 0.434,
+          "deformation_rate": 0.2144
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M17": 2.4,
+            "M8": 1.8,
+            "M5": 5.0
+          },
+          "deformation_scale": 0.403,
+          "deformation_rate": 0.0876
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M2": 2.5,
+            "M1": 2.4,
+            "M9": 4.2,
+            "M13": 4.5,
+            "M11": 1.7
+          },
+          "deformation_scale": 0.437,
+          "deformation_rate": 0.1966
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M1": 1.6,
+            "M13": 5.0,
+            "M12": 4.9,
+            "M14": 3.0,
+            "M15": 3.5
+          },
+          "deformation_scale": 0.249,
+          "deformation_rate": 0.1908
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M9": 4.8,
+            "M15": 2.2,
+            "M8": 3.3
+          },
+          "deformation_scale": 0.308,
+          "deformation_rate": 0.2357
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M1": 3.9,
+            "M17": 4.3,
+            "M12": 4.4,
+            "M11": 4.3
+          },
+          "deformation_scale": 0.226,
+          "deformation_rate": 0.2062
+        },
+        {
+          "id": "O12",
+          "machines": {
+            "M7": 3.9,
+            "M13": 3.7,
+            "M5": 3.4
+          },
+          "deformation_scale": 0.217,
+          "deformation_rate": 0.2212
+        },
+        {
+          "id": "O13",
+          "machines": {
+            "M13": 4.8,
+            "M8": 4.9,
+            "M16": 2.1
+          },
+          "deformation_scale": 0.368,
+          "deformation_rate": 0.2199
+        }
+      ]
+    },
+    {
+      "id": "J4",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M16": 3.0,
+            "M2": 4.8,
+            "M11": 4.6,
+            "M7": 5.0
+          },
+          "deformation_scale": 0.384,
+          "deformation_rate": 0.1471
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M8": 5.0,
+            "M16": 1.7,
+            "M1": 1.7
+          },
+          "deformation_scale": 0.433,
+          "deformation_rate": 0.1537
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M16": 4.5,
+            "M14": 1.6
+          },
+          "deformation_scale": 0.193,
+          "deformation_rate": 0.1032
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M6": 3.2,
+            "M16": 4.9,
+            "M17": 3.0
+          },
+          "deformation_scale": 0.324,
+          "deformation_rate": 0.1498
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M10": 4.1,
+            "M5": 1.9
+          },
+          "deformation_scale": 0.273,
+          "deformation_rate": 0.1781
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M12": 2.7,
+            "M14": 2.1,
+            "M5": 3.2
+          },
+          "deformation_scale": 0.338,
+          "deformation_rate": 0.1622
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M6": 2.4,
+            "M1": 3.7,
+            "M10": 2.1
+          },
+          "deformation_scale": 0.396,
+          "deformation_rate": 0.2324
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M2": 2.0,
+            "M12": 2.0,
+            "M5": 2.4,
+            "M14": 2.7
+          },
+          "deformation_scale": 0.347,
+          "deformation_rate": 0.1435
+        }
+      ]
+    },
+    {
+      "id": "J5",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M15": 3.4,
+            "M16": 2.2,
+            "M11": 3.1,
+            "M13": 2.4,
+            "M14": 2.8
+          },
+          "deformation_scale": 0.447,
+          "deformation_rate": 0.1566
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M5": 4.6,
+            "M7": 3.1,
+            "M9": 3.2,
+            "M12": 3.3
+          },
+          "deformation_scale": 0.417,
+          "deformation_rate": 0.1334
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M12": 3.6,
+            "M8": 2.7
+          },
+          "deformation_scale": 0.205,
+          "deformation_rate": 0.1687
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M1": 2.1,
+            "M5": 3.2,
+            "M10": 2.5,
+            "M8": 4.1,
+            "M12": 3.0
+          },
+          "deformation_scale": 0.412,
+          "deformation_rate": 0.1524
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M14": 4.1,
+            "M9": 3.8,
+            "M15": 4.1,
+            "M10": 3.2,
+            "M11": 1.5
+          },
+          "deformation_scale": 0.387,
+          "deformation_rate": 0.1999
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M17": 2.5,
+            "M11": 2.6,
+            "M14": 2.3,
+            "M7": 4.1
+          },
+          "deformation_scale": 0.304,
+          "deformation_rate": 0.1543
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M11": 3.4,
+            "M5": 4.4,
+            "M14": 1.8
+          },
+          "deformation_scale": 0.302,
+          "deformation_rate": 0.1424
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M14": 2.4,
+            "M5": 3.0,
+            "M9": 4.0
+          },
+          "deformation_scale": 0.297,
+          "deformation_rate": 0.1393
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M9": 4.1,
+            "M10": 4.9,
+            "M15": 4.2,
+            "M14": 2.4
+          },
+          "deformation_scale": 0.333,
+          "deformation_rate": 0.1311
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M15": 2.1,
+            "M8": 3.1,
+            "M6": 2.7,
+            "M12": 3.8
+          },
+          "deformation_scale": 0.299,
+          "deformation_rate": 0.1243
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M8": 4.2,
+            "M16": 4.2,
+            "M10": 2.5
+          },
+          "deformation_scale": 0.215,
+          "deformation_rate": 0.097
+        }
+      ]
+    },
+    {
+      "id": "J6",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M5": 4.4,
+            "M13": 3.3,
+            "M9": 4.1,
+            "M8": 2.4
+          },
+          "deformation_scale": 0.352,
+          "deformation_rate": 0.1801
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M1": 2.0,
+            "M10": 4.0,
+            "M11": 2.6
+          },
+          "deformation_scale": 0.211,
+          "deformation_rate": 0.1457
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M8": 2.6,
+            "M11": 2.3
+          },
+          "deformation_scale": 0.343,
+          "deformation_rate": 0.1948
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M15": 1.8,
+            "M10": 2.6,
+            "M12": 1.7,
+            "M17": 3.0,
+            "M9": 4.5
+          },
+          "deformation_scale": 0.43,
+          "deformation_rate": 0.1962
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M5": 2.0,
+            "M2": 1.9,
+            "M17": 1.6,
+            "M6": 2.5
+          },
+          "deformation_scale": 0.296,
+          "deformation_rate": 0.1517
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M8": 4.9,
+            "M7": 3.7,
+            "M2": 2.3
+          },
+          "deformation_scale": 0.279,
+          "deformation_rate": 0.2045
+        }
+      ]
+    },
+    {
+      "id": "J7",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M1": 2.1,
+            "M15": 4.7,
+            "M10": 1.8
+          },
+          "deformation_scale": 0.328,
+          "deformation_rate": 0.1657
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M17": 1.5,
+            "M10": 3.1
+          },
+          "deformation_scale": 0.254,
+          "deformation_rate": 0.2274
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M2": 2.7,
+            "M17": 2.1,
+            "M16": 4.8
+          },
+          "deformation_scale": 0.425,
+          "deformation_rate": 0.0924
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M10": 5.0,
+            "M16": 2.8,
+            "M2": 3.5,
+            "M1": 2.6,
+            "M14": 4.3
+          },
+          "deformation_scale": 0.315,
+          "deformation_rate": 0.138
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M8": 4.0,
+            "M14": 4.2,
+            "M9": 2.5,
+            "M11": 1.9
+          },
+          "deformation_scale": 0.215,
+          "deformation_rate": 0.1213
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M12": 2.8,
+            "M11": 3.0,
+            "M9": 4.4,
+            "M14": 3.8
+          },
+          "deformation_scale": 0.212,
+          "deformation_rate": 0.2178
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M13": 4.8,
+            "M5": 2.1,
+            "M7": 1.9,
+            "M6": 2.9,
+            "M8": 3.5
+          },
+          "deformation_scale": 0.255,
+          "deformation_rate": 0.2408
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M9": 4.4,
+            "M12": 4.7,
+            "M8": 4.4
+          },
+          "deformation_scale": 0.223,
+          "deformation_rate": 0.1165
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M13": 2.0,
+            "M8": 3.5,
+            "M12": 3.1,
+            "M2": 1.9,
+            "M15": 4.8
+          },
+          "deformation_scale": 0.263,
+          "deformation_rate": 0.08
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M10": 1.9,
+            "M1": 3.8,
+            "M12": 1.6,
+            "M16": 4.2
+          },
+          "deformation_scale": 0.367,
+          "deformation_rate": 0.2002
+        }
+      ]
+    },
+    {
+      "id": "J8",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M12": 1.6,
+            "M14": 2.9,
+            "M7": 5.0,
+            "M8": 4.4
+          },
+          "deformation_scale": 0.205,
+          "deformation_rate": 0.2003
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M13": 2.8,
+            "M9": 4.9,
+            "M10": 4.3,
+            "M1": 3.7,
+            "M12": 2.5
+          },
+          "deformation_scale": 0.224,
+          "deformation_rate": 0.2306
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M1": 2.3,
+            "M2": 3.8,
+            "M7": 4.3,
+            "M9": 2.5
+          },
+          "deformation_scale": 0.219,
+          "deformation_rate": 0.1142
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M7": 1.9,
+            "M16": 3.4
+          },
+          "deformation_scale": 0.275,
+          "deformation_rate": 0.0842
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M16": 3.6,
+            "M6": 2.8,
+            "M17": 2.4,
+            "M15": 2.8,
+            "M1": 2.5
+          },
+          "deformation_scale": 0.211,
+          "deformation_rate": 0.1825
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M12": 4.1,
+            "M17": 3.2,
+            "M14": 4.2,
+            "M13": 2.1,
+            "M8": 2.4
+          },
+          "deformation_scale": 0.431,
+          "deformation_rate": 0.2226
+        }
+      ]
+    },
+    {
+      "id": "J9",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M6": 4.3,
+            "M14": 3.8,
+            "M12": 4.4,
+            "M5": 3.0,
+            "M13": 3.4
+          },
+          "deformation_scale": 0.258,
+          "deformation_rate": 0.0833
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M16": 4.3,
+            "M2": 4.5,
+            "M1": 3.9,
+            "M14": 1.6
+          },
+          "deformation_scale": 0.307,
+          "deformation_rate": 0.2383
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M6": 1.8,
+            "M16": 3.6
+          },
+          "deformation_scale": 0.199,
+          "deformation_rate": 0.2397
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M7": 3.7,
+            "M17": 4.8,
+            "M15": 3.4
+          },
+          "deformation_scale": 0.214,
+          "deformation_rate": 0.1118
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M14": 4.4,
+            "M13": 2.0
+          },
+          "deformation_scale": 0.378,
+          "deformation_rate": 0.1193
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M11": 2.7,
+            "M17": 2.8,
+            "M6": 3.8
+          },
+          "deformation_scale": 0.352,
+          "deformation_rate": 0.1869
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M9": 4.8,
+            "M5": 2.2,
+            "M14": 3.1,
+            "M16": 1.8
+          },
+          "deformation_scale": 0.399,
+          "deformation_rate": 0.129
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M9": 2.2,
+            "M2": 1.5,
+            "M16": 4.8,
+            "M7": 4.6,
+            "M1": 4.9
+          },
+          "deformation_scale": 0.431,
+          "deformation_rate": 0.1854
+        }
+      ]
+    },
+    {
+      "id": "J10",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M2": 2.7,
+            "M1": 4.8
+          },
+          "deformation_scale": 0.39,
+          "deformation_rate": 0.2188
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M7": 1.9,
+            "M16": 2.5
+          },
+          "deformation_scale": 0.335,
+          "deformation_rate": 0.1182
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M15": 4.7,
+            "M14": 3.2,
+            "M13": 3.6,
+            "M7": 2.9,
+            "M1": 2.7
+          },
+          "deformation_scale": 0.191,
+          "deformation_rate": 0.2226
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M16": 2.3,
+            "M9": 2.6,
+            "M2": 2.7
+          },
+          "deformation_scale": 0.378,
+          "deformation_rate": 0.2175
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M16": 2.0,
+            "M11": 4.3
+          },
+          "deformation_scale": 0.307,
+          "deformation_rate": 0.174
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M15": 5.0,
+            "M12": 3.6,
+            "M5": 4.9,
+            "M1": 1.8,
+            "M11": 4.0
+          },
+          "deformation_scale": 0.346,
+          "deformation_rate": 0.1952
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M2": 4.3,
+            "M8": 3.6,
+            "M15": 2.0
+          },
+          "deformation_scale": 0.419,
+          "deformation_rate": 0.1192
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M8": 2.0,
+            "M6": 2.6,
+            "M5": 2.6,
+            "M10": 3.4,
+            "M7": 2.8
+          },
+          "deformation_scale": 0.209,
+          "deformation_rate": 0.2118
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M10": 2.7,
+            "M12": 4.5
+          },
+          "deformation_scale": 0.346,
+          "deformation_rate": 0.196
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M7": 1.9,
+            "M13": 3.4
+          },
+          "deformation_scale": 0.232,
+          "deformation_rate": 0.2278
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M5": 3.7,
+            "M12": 4.6,
+            "M2": 3.7,
+            "M17": 3.6,
+            "M1": 1.6
+          },
+          "deformation_scale": 0.245,
+          "deformation_rate": 0.2072
+        }
+      ]
+    },
+    {
+      "id": "J11",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M6": 3.2,
+            "M10": 3.2,
+            "M15": 3.0
+          },
+          "deformation_scale": 0.411,
+          "deformation_rate": 0.238
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M13": 1.8,
+            "M9": 2.3,
+            "M17": 4.6,
+            "M6": 4.8,
+            "M2": 4.1
+          },
+          "deformation_scale": 0.361,
+          "deformation_rate": 0.1396
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M7": 2.5,
+            "M17": 3.4,
+            "M16": 3.3,
+            "M15": 4.7,
+            "M10": 2.6
+          },
+          "deformation_scale": 0.403,
+          "deformation_rate": 0.1999
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M6": 2.1,
+            "M9": 4.5
+          },
+          "deformation_scale": 0.407,
+          "deformation_rate": 0.2003
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M11": 1.8,
+            "M13": 2.3,
+            "M2": 2.6,
+            "M17": 3.1
+          },
+          "deformation_scale": 0.431,
+          "deformation_rate": 0.1658
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M12": 4.1,
+            "M9": 3.4,
+            "M14": 1.5,
+            "M1": 2.7
+          },
+          "deformation_scale": 0.295,
+          "deformation_rate": 0.1565
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M7": 2.9,
+            "M17": 2.3
+          },
+          "deformation_scale": 0.296,
+          "deformation_rate": 0.1852
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M17": 2.8,
+            "M12": 4.2,
+            "M13": 2.9
+          },
+          "deformation_scale": 0.439,
+          "deformation_rate": 0.2423
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M2": 4.3,
+            "M13": 4.8,
+            "M9": 2.2,
+            "M1": 2.6,
+            "M6": 2.8
+          },
+          "deformation_scale": 0.444,
+          "deformation_rate": 0.1846
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M14": 3.0,
+            "M6": 2.0
+          },
+          "deformation_scale": 0.301,
+          "deformation_rate": 0.0943
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M9": 1.8,
+            "M12": 4.8
+          },
+          "deformation_scale": 0.214,
+          "deformation_rate": 0.2432
+        }
+      ]
+    },
+    {
+      "id": "J12",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M14": 4.2,
+            "M17": 4.6
+          },
+          "deformation_scale": 0.196,
+          "deformation_rate": 0.1412
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M17": 1.6,
+            "M6": 3.4,
+            "M15": 4.0,
+            "M11": 3.0,
+            "M12": 3.3
+          },
+          "deformation_scale": 0.341,
+          "deformation_rate": 0.1392
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M6": 4.9,
+            "M2": 2.8
+          },
+          "deformation_scale": 0.319,
+          "deformation_rate": 0.1356
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M7": 3.2,
+            "M6": 2.9,
+            "M8": 1.5
+          },
+          "deformation_scale": 0.432,
+          "deformation_rate": 0.1556
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M6": 2.2,
+            "M5": 2.6
+          },
+          "deformation_scale": 0.304,
+          "deformation_rate": 0.2011
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M12": 2.5,
+            "M17": 4.6,
+            "M11": 2.3,
+            "M16": 1.8,
+            "M2": 3.1
+          },
+          "deformation_scale": 0.41,
+          "deformation_rate": 0.2178
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M10": 2.7,
+            "M8": 4.9,
+            "M9": 3.9,
+            "M14": 4.0
+          },
+          "deformation_scale": 0.294,
+          "deformation_rate": 0.1534
+        }
+      ]
+    },
+    {
+      "id": "J13",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M10": 2.1,
+            "M14": 2.7
+          },
+          "deformation_scale": 0.181,
+          "deformation_rate": 0.1014
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M1": 2.7,
+            "M2": 2.5,
+            "M13": 4.2
+          },
+          "deformation_scale": 0.182,
+          "deformation_rate": 0.1842
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M11": 2.1,
+            "M16": 3.4,
+            "M10": 3.3,
+            "M14": 3.8
+          },
+          "deformation_scale": 0.188,
+          "deformation_rate": 0.096
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M16": 2.9,
+            "M1": 2.3,
+            "M15": 3.4
+          },
+          "deformation_scale": 0.299,
+          "deformation_rate": 0.2101
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M12": 1.9,
+            "M13": 2.0
+          },
+          "deformation_scale": 0.447,
+          "deformation_rate": 0.1477
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M11": 4.7,
+            "M16": 3.1
+          },
+          "deformation_scale": 0.193,
+          "deformation_rate": 0.0941
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M9": 3.3,
+            "M6": 4.0
+          },
+          "deformation_scale": 0.194,
+          "deformation_rate": 0.2099
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M11": 3.5,
+            "M9": 2.1
+          },
+          "deformation_scale": 0.348,
+          "deformation_rate": 0.1348
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M9": 3.5,
+            "M10": 3.5,
+            "M12": 4.1
+          },
+          "deformation_scale": 0.405,
+          "deformation_rate": 0.1885
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M1": 4.0,
+            "M13": 4.6,
+            "M17": 1.9
+          },
+          "deformation_scale": 0.266,
+          "deformation_rate": 0.1534
+        }
+      ]
+    },
+    {
+      "id": "J14",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M14": 4.2,
+            "M15": 4.6,
+            "M2": 3.1,
+            "M8": 3.6
+          },
+          "deformation_scale": 0.449,
+          "deformation_rate": 0.2299
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M6": 4.2,
+            "M9": 1.6
+          },
+          "deformation_scale": 0.332,
+          "deformation_rate": 0.2085
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M13": 4.6,
+            "M16": 2.6,
+            "M9": 3.2,
+            "M8": 1.7
+          },
+          "deformation_scale": 0.235,
+          "deformation_rate": 0.1987
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M1": 4.8,
+            "M6": 2.2,
+            "M5": 3.2
+          },
+          "deformation_scale": 0.267,
+          "deformation_rate": 0.111
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M12": 4.2,
+            "M6": 3.0,
+            "M17": 1.6
+          },
+          "deformation_scale": 0.239,
+          "deformation_rate": 0.1316
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M14": 2.8,
+            "M5": 4.2
+          },
+          "deformation_scale": 0.336,
+          "deformation_rate": 0.1716
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M9": 3.0,
+            "M1": 3.4,
+            "M12": 2.3,
+            "M16": 1.7,
+            "M10": 4.4
+          },
+          "deformation_scale": 0.244,
+          "deformation_rate": 0.0869
+        }
+      ]
+    },
+    {
+      "id": "J15",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M2": 3.7,
+            "M11": 2.3,
+            "M17": 2.4
+          },
+          "deformation_scale": 0.414,
+          "deformation_rate": 0.1204
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M5": 1.8,
+            "M6": 1.8,
+            "M13": 1.7
+          },
+          "deformation_scale": 0.223,
+          "deformation_rate": 0.2275
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M6": 3.0,
+            "M11": 3.0,
+            "M2": 4.0,
+            "M9": 4.3
+          },
+          "deformation_scale": 0.449,
+          "deformation_rate": 0.2251
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M5": 3.4,
+            "M17": 4.0,
+            "M12": 2.0,
+            "M13": 4.7,
+            "M16": 3.4
+          },
+          "deformation_scale": 0.21,
+          "deformation_rate": 0.0831
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M9": 3.9,
+            "M17": 4.7,
+            "M12": 3.8,
+            "M7": 1.9
+          },
+          "deformation_scale": 0.34,
+          "deformation_rate": 0.238
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M7": 2.3,
+            "M8": 3.4,
+            "M11": 1.6
+          },
+          "deformation_scale": 0.24,
+          "deformation_rate": 0.1147
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M16": 3.2,
+            "M11": 1.5,
+            "M10": 4.5
+          },
+          "deformation_scale": 0.265,
+          "deformation_rate": 0.1725
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M2": 3.6,
+            "M6": 2.6,
+            "M7": 3.3
+          },
+          "deformation_scale": 0.196,
+          "deformation_rate": 0.0943
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M1": 3.7,
+            "M10": 2.8,
+            "M9": 3.1,
+            "M2": 2.6
+          },
+          "deformation_scale": 0.215,
+          "deformation_rate": 0.1501
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M17": 4.4,
+            "M11": 1.9,
+            "M6": 2.1
+          },
+          "deformation_scale": 0.308,
+          "deformation_rate": 0.1783
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M16": 4.8,
+            "M17": 4.0,
+            "M12": 4.9,
+            "M7": 3.9,
+            "M14": 2.6
+          },
+          "deformation_scale": 0.309,
+          "deformation_rate": 0.1632
+        },
+        {
+          "id": "O12",
+          "machines": {
+            "M10": 4.7,
+            "M1": 4.6,
+            "M14": 4.9
+          },
+          "deformation_scale": 0.437,
+          "deformation_rate": 0.1835
+        }
+      ]
+    },
+    {
+      "id": "J16",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M7": 3.9,
+            "M6": 2.6
+          },
+          "deformation_scale": 0.336,
+          "deformation_rate": 0.2362
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M10": 2.4,
+            "M17": 4.3,
+            "M14": 2.0
+          },
+          "deformation_scale": 0.234,
+          "deformation_rate": 0.1717
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M8": 2.8,
+            "M2": 3.7,
+            "M13": 4.8
+          },
+          "deformation_scale": 0.311,
+          "deformation_rate": 0.15
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M8": 2.4,
+            "M9": 3.2,
+            "M14": 3.9,
+            "M12": 4.7,
+            "M1": 2.3
+          },
+          "deformation_scale": 0.347,
+          "deformation_rate": 0.1296
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M17": 4.2,
+            "M12": 1.8
+          },
+          "deformation_scale": 0.41,
+          "deformation_rate": 0.1198
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M17": 4.1,
+            "M6": 2.0,
+            "M7": 2.7,
+            "M16": 4.8,
+            "M12": 3.9
+          },
+          "deformation_scale": 0.277,
+          "deformation_rate": 0.1194
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M9": 4.4,
+            "M1": 3.5,
+            "M7": 3.6,
+            "M16": 4.2
+          },
+          "deformation_scale": 0.27,
+          "deformation_rate": 0.2468
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M8": 4.5,
+            "M7": 4.4,
+            "M16": 2.6,
+            "M5": 3.1
+          },
+          "deformation_scale": 0.311,
+          "deformation_rate": 0.1716
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M11": 1.8,
+            "M12": 4.3,
+            "M1": 1.8,
+            "M2": 2.4
+          },
+          "deformation_scale": 0.274,
+          "deformation_rate": 0.2297
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M11": 3.5,
+            "M2": 4.5
+          },
+          "deformation_scale": 0.408,
+          "deformation_rate": 0.1062
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M17": 4.3,
+            "M5": 2.3,
+            "M10": 3.0
+          },
+          "deformation_scale": 0.306,
+          "deformation_rate": 0.1926
+        },
+        {
+          "id": "O12",
+          "machines": {
+            "M10": 4.4,
+            "M17": 1.5
+          },
+          "deformation_scale": 0.325,
+          "deformation_rate": 0.0948
+        },
+        {
+          "id": "O13",
+          "machines": {
+            "M7": 3.6,
+            "M16": 3.5,
+            "M9": 4.4,
+            "M1": 4.1,
+            "M2": 1.9
+          },
+          "deformation_scale": 0.43,
+          "deformation_rate": 0.2203
+        }
+      ]
+    },
+    {
+      "id": "J17",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M6": 4.9,
+            "M17": 3.8
+          },
+          "deformation_scale": 0.297,
+          "deformation_rate": 0.1514
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M9": 3.8,
+            "M6": 2.7,
+            "M15": 1.9,
+            "M17": 4.7
+          },
+          "deformation_scale": 0.231,
+          "deformation_rate": 0.2058
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M6": 4.4,
+            "M7": 4.5,
+            "M2": 4.0
+          },
+          "deformation_scale": 0.336,
+          "deformation_rate": 0.1906
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M12": 4.1,
+            "M14": 4.3,
+            "M7": 3.2
+          },
+          "deformation_scale": 0.366,
+          "deformation_rate": 0.1299
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M14": 2.3,
+            "M16": 4.7,
+            "M9": 2.2,
+            "M17": 2.1,
+            "M6": 1.9
+          },
+          "deformation_scale": 0.214,
+          "deformation_rate": 0.0891
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M5": 4.5,
+            "M10": 2.7,
+            "M1": 3.8,
+            "M9": 1.9
+          },
+          "deformation_scale": 0.363,
+          "deformation_rate": 0.2139
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M15": 2.1,
+            "M6": 3.5,
+            "M5": 2.8,
+            "M13": 1.8,
+            "M11": 2.0
+          },
+          "deformation_scale": 0.301,
+          "deformation_rate": 0.1591
+        }
+      ]
+    },
+    {
+      "id": "J18",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M17": 4.7,
+            "M5": 3.7,
+            "M7": 4.4,
+            "M12": 1.7
+          },
+          "deformation_scale": 0.449,
+          "deformation_rate": 0.2069
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M8": 3.1,
+            "M15": 4.1,
+            "M9": 4.7
+          },
+          "deformation_scale": 0.442,
+          "deformation_rate": 0.1332
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M1": 1.5,
+            "M16": 4.1,
+            "M5": 3.2
+          },
+          "deformation_scale": 0.259,
+          "deformation_rate": 0.1906
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M9": 1.7,
+            "M5": 4.3,
+            "M11": 1.5,
+            "M2": 4.7
+          },
+          "deformation_scale": 0.397,
+          "deformation_rate": 0.2085
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M6": 3.9,
+            "M17": 3.1,
+            "M2": 3.9
+          },
+          "deformation_scale": 0.381,
+          "deformation_rate": 0.1994
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M7": 2.8,
+            "M5": 1.9
+          },
+          "deformation_scale": 0.366,
+          "deformation_rate": 0.1759
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M15": 4.2,
+            "M11": 2.7,
+            "M7": 2.7,
+            "M5": 2.2,
+            "M6": 4.8
+          },
+          "deformation_scale": 0.216,
+          "deformation_rate": 0.1538
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M7": 2.3,
+            "M12": 2.1,
+            "M15": 4.8
+          },
+          "deformation_scale": 0.448,
+          "deformation_rate": 0.1065
+        }
+      ]
+    },
+    {
+      "id": "J19",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M2": 2.5,
+            "M13": 4.7,
+            "M6": 2.2,
+            "M15": 2.6,
+            "M8": 4.0
+          },
+          "deformation_scale": 0.366,
+          "deformation_rate": 0.1442
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M11": 4.8,
+            "M14": 3.1,
+            "M15": 4.8
+          },
+          "deformation_scale": 0.402,
+          "deformation_rate": 0.1664
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M5": 4.4,
+            "M13": 2.4
+          },
+          "deformation_scale": 0.392,
+          "deformation_rate": 0.0917
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M17": 1.7,
+            "M9": 1.8,
+            "M1": 3.5,
+            "M16": 2.7,
+            "M12": 2.0
+          },
+          "deformation_scale": 0.249,
+          "deformation_rate": 0.2476
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M9": 4.4,
+            "M10": 3.7,
+            "M6": 2.5,
+            "M8": 2.2,
+            "M7": 3.2
+          },
+          "deformation_scale": 0.326,
+          "deformation_rate": 0.2119
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M11": 3.3,
+            "M8": 3.9,
+            "M13": 3.4
+          },
+          "deformation_scale": 0.369,
+          "deformation_rate": 0.1896
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M14": 1.5,
+            "M7": 4.2
+          },
+          "deformation_scale": 0.396,
+          "deformation_rate": 0.1838
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M16": 4.4,
+            "M15": 4.3,
+            "M11": 3.6
+          },
+          "deformation_scale": 0.212,
+          "deformation_rate": 0.2039
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M15": 5.0,
+            "M7": 4.6,
+            "M12": 4.8,
+            "M16": 3.5
+          },
+          "deformation_scale": 0.245,
+          "deformation_rate": 0.1315
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M11": 2.6,
+            "M15": 4.6,
+            "M17": 4.1
+          },
+          "deformation_scale": 0.261,
+          "deformation_rate": 0.2348
+        }
+      ]
+    },
+    {
+      "id": "J20",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M17": 2.1,
+            "M7": 1.8,
+            "M16": 2.8,
+            "M10": 3.0,
+            "M6": 1.7
+          },
+          "deformation_scale": 0.357,
+          "deformation_rate": 0.1164
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M17": 2.7,
+            "M11": 2.3,
+            "M6": 1.8
+          },
+          "deformation_scale": 0.31,
+          "deformation_rate": 0.1064
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M15": 2.1,
+            "M5": 4.4
+          },
+          "deformation_scale": 0.264,
+          "deformation_rate": 0.1564
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M14": 3.5,
+            "M2": 2.2,
+            "M1": 3.4,
+            "M6": 2.3
+          },
+          "deformation_scale": 0.293,
+          "deformation_rate": 0.0986
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M5": 4.9,
+            "M12": 3.6
+          },
+          "deformation_scale": 0.388,
+          "deformation_rate": 0.1206
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M11": 4.6,
+            "M8": 3.7
+          },
+          "deformation_scale": 0.184,
+          "deformation_rate": 0.1688
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M10": 2.6,
+            "M13": 2.6
+          },
+          "deformation_scale": 0.385,
+          "deformation_rate": 0.1697
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M13": 3.0,
+            "M1": 1.8,
+            "M9": 2.2,
+            "M6": 2.0,
+            "M10": 4.9
+          },
+          "deformation_scale": 0.335,
+          "deformation_rate": 0.0807
+        }
+      ]
+    },
+    {
+      "id": "J21",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M2": 4.6,
+            "M9": 3.5,
+            "M5": 3.7
+          },
+          "deformation_scale": 0.23,
+          "deformation_rate": 0.2392
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M13": 4.3,
+            "M14": 2.1,
+            "M11": 2.5
+          },
+          "deformation_scale": 0.303,
+          "deformation_rate": 0.1532
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M13": 5.0,
+            "M1": 4.0,
+            "M17": 2.0,
+            "M6": 1.7
+          },
+          "deformation_scale": 0.438,
+          "deformation_rate": 0.1147
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M11": 3.8,
+            "M15": 3.2,
+            "M8": 4.0,
+            "M7": 2.8,
+            "M5": 4.0
+          },
+          "deformation_scale": 0.301,
+          "deformation_rate": 0.154
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M6": 2.0,
+            "M15": 2.3,
+            "M11": 1.9,
+            "M17": 2.2
+          },
+          "deformation_scale": 0.378,
+          "deformation_rate": 0.1986
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M16": 1.6,
+            "M14": 4.0,
+            "M10": 3.0
+          },
+          "deformation_scale": 0.218,
+          "deformation_rate": 0.1203
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M8": 2.5,
+            "M16": 3.2,
+            "M14": 4.2,
+            "M9": 1.7,
+            "M11": 3.8
+          },
+          "deformation_scale": 0.19,
+          "deformation_rate": 0.1961
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M7": 4.0,
+            "M5": 2.7,
+            "M9": 2.2
+          },
+          "deformation_scale": 0.184,
+          "deformation_rate": 0.2357
+        }
+      ]
+    },
+    {
+      "id": "J22",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M15": 3.4,
+            "M9": 2.3
+          },
+          "deformation_scale": 0.263,
+          "deformation_rate": 0.1384
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M13": 2.1,
+            "M10": 2.5,
+            "M17": 3.9,
+            "M9": 3.9,
+            "M8": 3.6
+          },
+          "deformation_scale": 0.299,
+          "deformation_rate": 0.1514
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M17": 3.3,
+            "M6": 2.8,
+            "M9": 3.9
+          },
+          "deformation_scale": 0.251,
+          "deformation_rate": 0.1628
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M9": 3.3,
+            "M17": 2.3
+          },
+          "deformation_scale": 0.197,
+          "deformation_rate": 0.1779
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M6": 3.7,
+            "M9": 4.8,
+            "M10": 4.0
+          },
+          "deformation_scale": 0.326,
+          "deformation_rate": 0.1915
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M1": 3.6,
+            "M12": 4.6,
+            "M11": 1.8,
+            "M16": 1.7
+          },
+          "deformation_scale": 0.425,
+          "deformation_rate": 0.0822
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M14": 4.6,
+            "M12": 4.6
+          },
+          "deformation_scale": 0.398,
+          "deformation_rate": 0.1112
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M8": 2.0,
+            "M11": 2.2,
+            "M1": 2.0,
+            "M15": 4.8
+          },
+          "deformation_scale": 0.278,
+          "deformation_rate": 0.2307
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M2": 2.7,
+            "M6": 2.2,
+            "M17": 3.9,
+            "M12": 3.9
+          },
+          "deformation_scale": 0.281,
+          "deformation_rate": 0.1107
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M16": 3.6,
+            "M14": 4.7,
+            "M5": 1.5
+          },
+          "deformation_scale": 0.377,
+          "deformation_rate": 0.0927
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M10": 4.2,
+            "M1": 2.5,
+            "M8": 2.5,
+            "M6": 1.6
+          },
+          "deformation_scale": 0.287,
+          "deformation_rate": 0.1672
+        },
+        {
+          "id": "O12",
+          "machines": {
+            "M12": 3.0,
+            "M1": 4.8
+          },
+          "deformation_scale": 0.343,
+          "deformation_rate": 0.2098
+        }
+      ]
+    },
+    {
+      "id": "J23",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M13": 2.6,
+            "M8": 4.5,
+            "M10": 3.2
+          },
+          "deformation_scale": 0.286,
+          "deformation_rate": 0.1012
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M11": 3.3,
+            "M13": 4.9
+          },
+          "deformation_scale": 0.301,
+          "deformation_rate": 0.1191
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M10": 3.5,
+            "M17": 4.4,
+            "M5": 3.9,
+            "M1": 3.1
+          },
+          "deformation_scale": 0.318,
+          "deformation_rate": 0.0844
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M5": 1.6,
+            "M10": 2.4,
+            "M7": 4.8,
+            "M15": 3.2,
+            "M13": 3.4
+          },
+          "deformation_scale": 0.21,
+          "deformation_rate": 0.24
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M11": 2.9,
+            "M2": 1.5
+          },
+          "deformation_scale": 0.403,
+          "deformation_rate": 0.2339
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M12": 1.9,
+            "M5": 3.6,
+            "M6": 4.0
+          },
+          "deformation_scale": 0.274,
+          "deformation_rate": 0.1437
+        }
+      ]
+    },
+    {
+      "id": "J24",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M1": 4.6,
+            "M13": 1.7,
+            "M2": 2.1,
+            "M14": 3.4,
+            "M15": 4.8
+          },
+          "deformation_scale": 0.281,
+          "deformation_rate": 0.126
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M6": 3.1,
+            "M12": 3.9,
+            "M2": 3.6,
+            "M17": 4.3
+          },
+          "deformation_scale": 0.279,
+          "deformation_rate": 0.2459
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M14": 2.4,
+            "M12": 1.6,
+            "M13": 4.9,
+            "M1": 3.1
+          },
+          "deformation_scale": 0.327,
+          "deformation_rate": 0.0803
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M5": 1.9,
+            "M15": 3.9,
+            "M12": 3.0,
+            "M2": 2.2
+          },
+          "deformation_scale": 0.404,
+          "deformation_rate": 0.0856
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M10": 2.8,
+            "M11": 5.0,
+            "M8": 4.9,
+            "M9": 4.2,
+            "M12": 1.8
+          },
+          "deformation_scale": 0.182,
+          "deformation_rate": 0.0928
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M2": 1.9,
+            "M15": 4.4,
+            "M7": 2.4,
+            "M5": 1.6,
+            "M16": 3.4
+          },
+          "deformation_scale": 0.202,
+          "deformation_rate": 0.2467
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M17": 1.8,
+            "M10": 2.1,
+            "M12": 2.7,
+            "M16": 1.7
+          },
+          "deformation_scale": 0.415,
+          "deformation_rate": 0.1986
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M1": 2.5,
+            "M6": 1.6,
+            "M17": 5.0
+          },
+          "deformation_scale": 0.205,
+          "deformation_rate": 0.1698
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M10": 4.8,
+            "M2": 4.4,
+            "M11": 4.0
+          },
+          "deformation_scale": 0.378,
+          "deformation_rate": 0.2362
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M17": 3.7,
+            "M8": 1.8,
+            "M5": 2.2
+          },
+          "deformation_scale": 0.378,
+          "deformation_rate": 0.102
+        },
+        {
+          "id": "O11",
+          "machines": {
+            "M10": 3.5,
+            "M9": 3.0,
+            "M17": 5.0,
+            "M11": 3.8
+          },
+          "deformation_scale": 0.211,
+          "deformation_rate": 0.0934
+        },
+        {
+          "id": "O12",
+          "machines": {
+            "M15": 4.2,
+            "M5": 2.8,
+            "M7": 3.3,
+            "M12": 4.7,
+            "M11": 2.3
+          },
+          "deformation_scale": 0.383,
+          "deformation_rate": 0.2405
+        },
+        {
+          "id": "O13",
+          "machines": {
+            "M17": 2.3,
+            "M9": 3.1,
+            "M8": 3.0
+          },
+          "deformation_scale": 0.22,
+          "deformation_rate": 0.1229
+        }
+      ]
+    },
+    {
+      "id": "J25",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M14": 4.2,
+            "M12": 4.1,
+            "M1": 3.2
+          },
+          "deformation_scale": 0.312,
+          "deformation_rate": 0.161
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M1": 1.7,
+            "M5": 2.5,
+            "M17": 1.9,
+            "M12": 3.9,
+            "M6": 1.8
+          },
+          "deformation_scale": 0.255,
+          "deformation_rate": 0.1374
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M10": 1.5,
+            "M13": 4.1,
+            "M9": 4.2,
+            "M12": 2.8
+          },
+          "deformation_scale": 0.396,
+          "deformation_rate": 0.0922
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M14": 2.6,
+            "M16": 4.0,
+            "M11": 2.4,
+            "M7": 2.5,
+            "M5": 2.3
+          },
+          "deformation_scale": 0.199,
+          "deformation_rate": 0.2006
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M8": 2.0,
+            "M1": 4.8,
+            "M16": 2.9,
+            "M17": 4.0
+          },
+          "deformation_scale": 0.3,
+          "deformation_rate": 0.2433
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M16": 4.6,
+            "M13": 3.9,
+            "M11": 4.1
+          },
+          "deformation_scale": 0.336,
+          "deformation_rate": 0.1272
+        }
+      ]
+    },
+    {
+      "id": "J26",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M1": 2.9,
+            "M13": 4.0,
+            "M10": 3.8
+          },
+          "deformation_scale": 0.383,
+          "deformation_rate": 0.179
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M5": 4.7,
+            "M8": 4.2,
+            "M16": 4.2
+          },
+          "deformation_scale": 0.346,
+          "deformation_rate": 0.1942
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M12": 4.5,
+            "M2": 1.7,
+            "M8": 4.8,
+            "M9": 3.0
+          },
+          "deformation_scale": 0.195,
+          "deformation_rate": 0.1661
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M7": 4.5,
+            "M16": 1.8,
+            "M15": 2.1,
+            "M8": 3.4,
+            "M9": 3.4
+          },
+          "deformation_scale": 0.27,
+          "deformation_rate": 0.2498
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M13": 2.0,
+            "M5": 3.0,
+            "M12": 3.3,
+            "M6": 3.5
+          },
+          "deformation_scale": 0.245,
+          "deformation_rate": 0.2067
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M2": 3.1,
+            "M16": 3.5,
+            "M10": 3.2,
+            "M12": 2.3
+          },
+          "deformation_scale": 0.382,
+          "deformation_rate": 0.1842
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M7": 2.4,
+            "M15": 2.1,
+            "M13": 2.8
+          },
+          "deformation_scale": 0.352,
+          "deformation_rate": 0.2235
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M7": 1.6,
+            "M13": 2.9,
+            "M9": 4.8,
+            "M12": 3.5
+          },
+          "deformation_scale": 0.379,
+          "deformation_rate": 0.1943
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M2": 4.9,
+            "M12": 3.6,
+            "M9": 3.2
+          },
+          "deformation_scale": 0.305,
+          "deformation_rate": 0.204
+        }
+      ]
+    },
+    {
+      "id": "J27",
+      "operations": [
+        {
+          "id": "O1",
+          "machines": {
+            "M10": 3.9,
+            "M16": 3.7
+          },
+          "deformation_scale": 0.242,
+          "deformation_rate": 0.0943
+        },
+        {
+          "id": "O2",
+          "machines": {
+            "M7": 4.8,
+            "M17": 2.6,
+            "M16": 2.4
+          },
+          "deformation_scale": 0.381,
+          "deformation_rate": 0.1976
+        },
+        {
+          "id": "O3",
+          "machines": {
+            "M10": 3.3,
+            "M5": 4.0,
+            "M2": 2.2,
+            "M1": 1.7,
+            "M14": 1.7
+          },
+          "deformation_scale": 0.306,
+          "deformation_rate": 0.2048
+        },
+        {
+          "id": "O4",
+          "machines": {
+            "M10": 3.2,
+            "M17": 4.7,
+            "M7": 1.7
+          },
+          "deformation_scale": 0.322,
+          "deformation_rate": 0.0865
+        },
+        {
+          "id": "O5",
+          "machines": {
+            "M12": 4.1,
+            "M15": 3.3,
+            "M1": 4.1
+          },
+          "deformation_scale": 0.228,
+          "deformation_rate": 0.1162
+        },
+        {
+          "id": "O6",
+          "machines": {
+            "M16": 4.0,
+            "M17": 4.7
+          },
+          "deformation_scale": 0.356,
+          "deformation_rate": 0.0954
+        },
+        {
+          "id": "O7",
+          "machines": {
+            "M11": 3.5,
+            "M9": 3.0,
+            "M12": 4.1,
+            "M8": 4.2
+          },
+          "deformation_scale": 0.405,
+          "deformation_rate": 0.1024
+        },
+        {
+          "id": "O8",
+          "machines": {
+            "M2": 2.0,
+            "M6": 3.6
+          },
+          "deformation_scale": 0.27,
+          "deformation_rate": 0.1711
+        },
+        {
+          "id": "O9",
+          "machines": {
+            "M16": 2.3,
+            "M6": 2.0,
+            "M15": 1.9,
+            "M7": 2.9
+          },
+          "deformation_scale": 0.262,
+          "deformation_rate": 0.1341
+        },
+        {
+          "id": "O10",
+          "machines": {
+            "M15": 4.9,
+            "M11": 3.0,
+            "M12": 4.3
+          },
+          "deformation_scale": 0.383,
+          "deformation_rate": 0.1667
+        }
+      ]
+    }
+  ],
+  "stress_relief": {
+    "enabled": true,
+    "machines": {
+      "M3": 0.39
+    },
+    "cost": 0.0,
+    "max_per_job": 12,
+    "allowed_after_operations": [
+      "O1",
+      "O2",
+      "O3",
+      "O4",
+      "O5",
+      "O6",
+      "O7",
+      "O8",
+      "O9",
+      "O10",
+      "O11",
+      "O12"
+    ]
+  },
+  "compensation": {
+    "enabled": true,
+    "machines": {
+      "M4": 1.0
+    },
+    "cost": 0.0,
+    "max_per_job": 12,
+    "allowed_after_operations": [
+      "O1",
+      "O2",
+      "O3",
+      "O4",
+      "O5",
+      "O6",
+      "O7",
+      "O8",
+      "O9",
+      "O10",
+      "O11",
+      "O12"
+    ],
+    "trigger_deformation": 0.3,
+    "allow_original_machine": true,
+    "original_machine_duration_factor": 1.0
+  },
+  "physics": {
+    "default_deformation_scale": 1.0,
+    "default_deformation_rate": 0.04,
+    "minimum_deformation_ratio": 0.5,
+    "compensation_deformation_factor": 0.11
+  },
+  "objective": {
+    "makespan_weight": 1.0,
+    "relief_cost_weight": 0.5,
+    "compensation_cost_weight": 0.5,
+    "waiting_cost_weight": 0.0,
+    "waiting_unit_cost": 0.0
+  },
+  "environment": {
+    "max_decisions": 5000,
+    "max_time": 1000.0,
+    "readiness_scan_step": 0.25
+  }
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
 import torch
 
 from .gae import generalized_advantage_estimate
@@ -76,18 +77,20 @@ class RolloutBuffer:
         )
         max_actions = max(len(rows) for rows in self.action_features)
         action_dim = len(self.action_features[0][0])
-        padded = torch.zeros(
-            (len(self), max_actions, action_dim), dtype=torch.float32, device=device
-        )
-        masks = torch.zeros((len(self), max_actions), dtype=torch.bool, device=device)
+        # Build variable-length candidates once on the host. Writing one small
+        # device tensor per decision otherwise launches thousands of transfers
+        # for every rollout, even though all inputs already live on the CPU.
+        padded = np.zeros((len(self), max_actions, action_dim), dtype=np.float32)
+        masks = np.zeros((len(self), max_actions), dtype=np.bool_)
         for index, rows in enumerate(self.action_features):
             count = len(rows)
-            padded[index, :count] = torch.tensor(rows, dtype=torch.float32, device=device)
+            if count:
+                padded[index, :count] = rows
             masks[index, :count] = True
         return {
             "observations": torch.tensor(self.observations, dtype=torch.float32, device=device),
-            "action_features": padded,
-            "action_masks": masks,
+            "action_features": torch.from_numpy(padded).to(device),
+            "action_masks": torch.from_numpy(masks).to(device),
             "choices": torch.tensor(self.choices, dtype=torch.long, device=device),
             "old_log_probs": torch.tensor(self.old_log_probs, dtype=torch.float32, device=device),
             "advantages": torch.tensor(advantages, dtype=torch.float32, device=device),

@@ -540,3 +540,441 @@ None
 
 - 待需要正式动态对比时，使用静态MLP/GNN来源权重创建新的动态运行，并按相同修复协议重新评价。
 - 先前审计中的截断奖励／bootstrap属于独立问题，本次没有扩展修改。
+
+---
+
+Doc-ID: IMPL-2026-11-05-001
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 旧dataset1静态和动态归dataset_test，扩充dataset1并补充dataset2动态；用户最终确认容量1000／100／200
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 统一data/dataset_test、data/dataset1、data/dataset2下的static/dynamic目录，每个模式各自含train、validation、test。
+- 旧小集静态／动态各100／20／20原样保存；dataset1、dataset2静态／动态各1000／100／200。
+- dataset1保留旧成员并按split追加；dataset2现有静态文件字节不变，补齐配对动态1300实例。
+- 保留旧路径兼容链接，配置改为规范路径；正在运行的dataset2 MLP继续正常运行。
+- 完整pytest100项和276次动态规则排程通过，生成器和迁移记录可复查。
+
+## Assumptions
+
+- 最终容量以用户明确回复“统一为1000训练＋100验证＋200测试”为准。
+- 保留同等物理／时间／成本分布及每类1～2次事件，不增加动态扰动强度。
+- dataset_test是历史小数据集名称，不是新增独立holdout；其test始终留在新版dataset1/test。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+先归档原数据并记录全部SHA256，在临时目录扩容与生成，校验静态配对、split互斥、事件合法性后发布新布局，保留原路径兼容入口，再验证当前训练和全部回归。
+
+## Changes (by file/module)
+
+- `data/dataset_test/{static,dynamic}`：完整旧小集。原README、manifest和全部实例字节保持一致。
+- `data/dataset1/{static,dynamic}`：各1300实例；每split保留旧文件，分别追加900训练、80验证、180测试。静态扩容使用20261105与独立split偏移，动态保留原轨迹并补齐65／20／10／5%固定场景。
+- `data/dataset2/static`：迁入原1300静态实例及元数据；`dynamic`新增1300配对实例，故障池与reference_horizon按实际生产机数生成。
+- `data/dataset`、`data/dataset_dynamic`及dataset2旧split/manifest：相对兼容链接，历史配置／checkpoint仍定位相同数据。
+- `data/dataset-layout-migration.json`：迁移前全部旧文件哈希和兼容路径；`dataset-layout-validation.json`：容量、范围、配对及固定事件校验摘要。
+- `scripts/organize_datasets.py`：临时生成、校验、迁移发布及错误回滚；支持`--check`复验，拒绝重复覆盖已整理目录。
+- `scripts/generate_dataset.py`：扩容时保留原split和字节，独立split RNG避免train容量改变导致eval样本变化；拒绝覆盖非空目标。
+- `scripts/generate_dataset2.py`：支持独立目标路径与seed，默认指向static并拒绝覆盖；原seed可精确复现既有1300静态实例与manifest。
+- `scripts/generate_dynamic_dataset.py`：容量读取源manifest，支持旧动态保留、固定场景差额补足，以及不同机器规模。
+- `scripts/validate_dynamic_dataset.py`：参数化目录，检查文件与manifest、基础实例配对、内容去重、事件隐藏／合法／固定轨迹／随机重采样。
+- `scripts/validate_dataset2.py`：支持规范static路径及CLI覆盖；`make_zero_cost_dataset.py`明确继续派生旧小集。
+- 18份配置：更新规范数据路径，修复3份动态配置的失效初始化路径；所有训练参数和输出目录保持不变。现有checkpoint仍来自旧数据训练，本次未重新训练。
+- `tests/test_dataset_layout.py`、`test_dynamic_generation.py`：迁移哈希／配对／划分／生成稳定性、可变规模动态生成及错误拒绝测试；旧数据回归改指dataset_test，对比预检容量改为1000。
+- `data/README.md`及各组README：当前布局、容量、兼容、原数据关系与复现命令；根README增加入口，保留其原编码字节。
+
+## Tests Run
+
+- `python -m pytest -q`：100 passed in 31.33s。
+- 整理脚本及`--check`：六个子集文件数与manifest完全一致；全部静态／动态基础内容配对；每套去名称／事件后无跨split或split内重复。
+- 迁移前SHA256核对：旧140静态、140动态及dataset2的1300静态实例和原元数据完全一致。
+- 生成器复现：dataset1静态、dataset1动态、dataset2动态的全部实例字节可复现；dataset2原seed复现1300实例和原manifest完全一致。
+- `validate_dataset2.py`通过，包括完整范围检查与规则排程抽样。
+- dataset1静态、动态两对真实配置的`check_comparison.py`预检通过；初始化checkpoint可严格加载。
+- 新动态数据按validation/test场景与生产机器数抽样，dataset1固定32次＋随机48次、dataset2固定148次＋随机48次，共276次规则排程均正常完成且无违规。
+- `git diff --check`通过；MLP进程持续运行，整理后已推进至3290回合以上，旧训练数据路径兼容。
+
+## Risks and Rollback Notes
+
+- 文件重定位会让Git工作区显示大量删除与未跟踪新增；旧文件实际保存在规范目录，未执行git add、commit或push。
+- 兼容使用相对symlink，在当前Linux环境有效；迁移到不支持symlink的平台应使用规范路径。
+- dataset_test与新版dataset1有重合，不能当独立泛化集；静态与动态配对也不能跨split混用。
+- 相同事件数量在更大实例上相对扰动更低；本次保留协议，后续强度实验应另设受控条件。
+- 配置路径更新仅作用于后续启动；已运行MLP与既有outputs配置快照未改写。历史报告的旧容量和旧路径保留为实验记录。
+
+## Follow-ups
+
+- 后续按data/README.md的规范路径训练／评价；旧训练结果不自动变成扩容数据集上的重新训练结果。
+
+---
+
+Doc-ID: IMPL-2026-11-05-002
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 确认并删除data/dataset及data/dataset_dynamic兼容入口
+Activated-Skills: code-agent-core
+
+## Summary
+
+- 删除两个旧小集相对symlink，仅unlink链接，真实dataset_test数据不变。
+- 目录校验允许旧链接缺失；从旧布局迁移时不再创建这两个链接。
+- 当前MLP使用dataset2，保留其兼容链接，训练持续正常。
+
+## Assumptions
+
+- 新配置已全部使用dataset1或dataset_test的规范路径。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+核对链接目标、活动配置与训练来源后删除链接，更新校验及说明，再验证真实数据哈希与历史数据回归。
+
+## Changes (by file/module)
+
+- `data/dataset`、`data/dataset_dynamic`：移除链接，保留其目标dataset_test/static及dynamic。
+- `scripts/organize_datasets.py`：旧小集链接变为可选，不再在迁移时创建。
+- `data/README.md`：更新当前路径和历史checkpoint／命令的显式路径替换说明。
+- `data/dataset-layout-migration.json`：追加链接删除记录，原始迁移哈希保留。
+
+## Tests Run
+
+- `pytest -q tests/test_dataset_layout.py tests/test_dataset.py tests/test_dynamic_dataset.py`：8 passed in 7.27s。
+- 删除前后dataset_test全部文件SHA256完全一致，静态／动态各100／20／20。
+- `git diff --check`通过；MLP launcher及rank进程仍正常运行。
+
+## Risks and Rollback Notes
+
+- 历史命令若仍使用两个旧路径，应显式改用dataset_test/static或dynamic。
+- 如需恢复，可创建相同相对symlink；数据文件无需恢复。
+
+## Follow-ups
+
+None
+
+---
+
+Doc-ID: IMPL-2026-11-05-003
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 为dataset1、dataset2生成cost0版本，去应力及补偿费用归零、时间占用不变
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 新增dataset1_cost0和dataset2_cost0，各含static/dynamic，四个子集均为1000／100／200，共5200实例。
+- 两额外费用置0.0，全部时长、设备、物理参数、目标权重与动态事件保持不变。
+- 保留实例名称与对应文件名，manifest记录来源、源哈希及变更字段。
+- 未修改原始数据或当前训练，未启动新的训练。
+
+## Assumptions
+
+- 本轮开始时旧dataset1_cost0目录已不存在，因此无需覆盖或归档旧数据。
+- cost0同时覆盖静态及动态模式，沿用此前统一目录结构。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+核对目标目录和旧配置，参数化派生脚本，以临时目录生成并验证，再发布两个family，校验动态协议、源数据只读以及物理时间一致性。
+
+## Changes (by file/module)
+
+- `scripts/make_zero_cost_dataset.py`：新增family级generate_dataset和validate_dataset，默认生成两组；CLI支持--source-root、--target-root、--check。严格检查manifest文件数和静态／动态配对，拒绝覆盖非空目标，生成期间源文件哈希不变。
+- `data/dataset1_cost0`、`data/dataset2_cost0`：四个派生子集，仅实例中的stress_relief.cost与compensation.cost改变。manifest去除对旧有成本字节的保留断言，记录派生源哈希，动态base_dataset指向cost0/static；费用范围元数据同步为[0,0]。
+- `configs/dataset1_cost0.json`：数据路径改为新版static目录，原训练参数及输出目录不变。
+- `tests/test_zero_cost_dataset.py`：6项覆盖只改费用、源只读、拒绝覆盖／不完整源、篡改时长和事件拒绝；静态／动态执行包含去应力和补偿的相同动作序列，比较时钟和排程。
+- `data/README.md`及两组README：更新容量、费用语义及验证／复现命令。`docs/parameter-spec.md`记录参数约束。
+
+## Tests Run
+
+- 完整pytest：106 passed in 31.19s；后续增加源manifest检查及修正费用范围元数据后，6项相关测试再次通过。
+- 全部5200实例逐字段对照，除两项费用外与来源相同；source manifest及实例SHA256一致。
+- 两组cost0/dynamic通过完整动态验证，保留固定场景配额、原事件轨迹及随机采样配置。
+- 真实cost0数据按两规模、静态及四动态场景抽样共10次规则排程，均正常完成、无违规、额外费用为0且objective=makespan。
+- `git diff --check`通过，MLP训练进程持续正常。
+
+## Risks and Rollback Notes
+
+- 成本特征和奖励因费用归零发生预期变化；即使物理过程不变，重新训练的策略仍可能选择不同动作，这是成本消融的目的。
+- 保留实例名便于配对，不应将cost0与原始实例不加区分合并为独立测试样本。
+- 当前等待额外费用为0，因此正常结束目标等于makespan；故障、去应力、补偿仍可通过时长和资源占用影响目标。
+
+## Follow-ups
+
+- 需要训练时显式选择cost0数据路径；本轮仅生成并验证数据。
+
+---
+
+Doc-ID: IMPL-2026-11-05-004
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 生成dataset3和dataset3_cost0，工件18～30、每件工序6～13、设备12～18，其余设置与dataset1／2一致
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- dataset3和dataset3_cost0均生成static/dynamic，每模式1000训练、100验证、200测试，共5200实例。
+- 每实例18～30个工件，每工件6～13道普通工序，总设备12～18台，含M3／M4各1台。
+- 复用dataset2工艺和成本分布、通用动态事件生成器和cost0派生器；动态概率和原参数保持一致。
+- 辅助允许位置及次数随最大13工序扩到12个工序间隙；未改变训练配置或启动新训练。
+
+## Assumptions
+
+- 沿用前文设备口径：12～18指总设备数，普通设备为10～16台。
+- “其余一致”包括1000／100／200容量、每工序2～5候选设备、物理／时间／费用分布、目标权重、事件概率和环境限制。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+扩展共享实例生成器的显式可选规模参数，保持dataset2默认行为不变；生成dataset3静态，再生成配对动态和cost0，验证全量范围、事件、配对和物理排程。
+
+## Changes (by file/module)
+
+- `scripts/generate_dataset2.py`：_instance新增可选工序范围、机器池、名称前缀参数，默认值与旧行为一致；辅助次数及允许位置随指定最大工序数生成。
+- `scripts/generate_dataset3.py`：固定种子20261106，独立split随机种子；工件数和设备数边际均衡，91种工件／设备组合可覆盖；目标非空时拒绝覆盖，临时生成后发布。
+- `scripts/validate_dataset3.py`：容量、完整manifest、去名称内容查重、规模分布、工艺与目标范围、辅助允许位置，以及动态配对／事件与可选cost0逐字段检查。
+- `data/dataset3/static`：1300实例，工件18～30、工序6～13、普通设备10～16，总设备12～18；去应力和补偿最多12次，允许O1～O12后执行。
+- `data/dataset3/dynamic`：基于同名静态实例，seed20261107；train每reset采样，validation场景65／20／10／5，test130／40／20／10。
+- `data/dataset3_cost0/{static,dynamic}`：2600派生实例，仅两项辅助费用为0，时长、事件和物理配置不变。
+- `tests/test_dataset3.py`：4项覆盖可复现／拒绝覆盖、split稳定性、规模及原参数一致性、dataset2默认实例兼容。
+- `data/README.md`、dataset3 README、`docs/parameter-spec.md`：记录总设备口径、容量、规则与复现／校验命令；dataset3/validation.json保存全量校验结果。
+
+## Tests Run
+
+- 完整pytest：110 passed in 32.67s。
+- `validate_dataset3.py --cost0-root data/dataset3_cost0`通过：全部5200实例容量、范围、配对、查重、动态规则和cost0字段差异正确。
+- 独立重新生成dataset2的1300个原实例，与现存静态文件内容全部一致；共享生成器默认行为未改变。
+- 大规模静态／动态按场景及总设备数量分层，另选工序总量最大实例，共67实例、268次规则排程均正常完成且无违规；另18次有成本／cost0配对动作序列验证通过。结果见data/dataset3/scheduling-smoke.json。
+- cost0与有成本版本相同动作序列的时钟和排程（除费用）一致；cost0正常完成目标等于makespan。
+- `git diff --check`通过；当前dataset2 MLP进程继续正常运行。
+
+## Risks and Rollback Notes
+
+- 12～18台设备包括辅助设备；普通加工设备是10～16，文档与manifest已显式记录。
+- 动态每类事件仍1～2次，规模增大后相对扰动更低；并未静默提高事件强度。
+- 固定2～5台候选意味着随总机器增多，相对柔性比例下降，沿用dataset2现规则；跨规模结果包含该分布变化。
+- cost0与有成本数据共享基础实例，静态与动态也配对，不得跨版本混入train／test。
+- 新增数据、脚本及文档保持未提交状态；没有改写现有数据实例和训练参数。
+
+## Follow-ups
+
+- 如需训练，显式使用data/dataset3或dataset3_cost0下的static/dynamic split；本轮未启动训练。
+
+---
+
+Doc-ID: IMPL-2026-11-05-005
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 确认data是否被Git忽略；统计训练和验证中完成一次完整加工过程的实际耗时
+Activated-Skills: code-agent-core
+
+## Summary
+
+- data未被.gitignore忽略；旧位置已有1730个受跟踪路径，新数据多数尚未跟踪，本轮未暂存或提交。
+- 训练采样、模型验证及规则评估新增完整回合实际耗时，并分别记录策略决策和GNN构图耗时。
+- PPO更新独立计时，多卡取各rank最大值；完整验证集另记录整轮耗时。
+- 保存训练／验证历史及评估汇总，兼容旧checkpoint和缺少计时字段的旧日志。
+- 当前运行中的dataset2 MLP保持运行，新增统计从后续启动／恢复的训练及新评估开始生效。
+
+## Assumptions
+
+- “完成一次加工过程需要多久”指程序生成完整排程的实际计算秒数；车间模拟完工时间仍使用makespan。
+- 一个完整加工回合对应一个数据实例内全部工件的调度过程，而非单道工序。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+核对Git忽略规则，统一回合计时范围，接入训练／验证日志及评估汇总，再验证时钟范围、静动态结果、多进程和旧日志续训。
+
+## Changes (by file/module)
+
+- `src/ppo_rs/timing.py`：统一EpisodeTimer，使用perf_counter，CUDA回合边界同步；输出episode_wall_seconds、policy_inference_seconds、graph_construction_seconds。
+- `algorithms/ppo.py`、`evaluation/runner.py`、`baselines/policies.py`：覆盖reset、状态处理、动作选择、环境推进、最终指标／约束检查；训练还含轨迹buffer写入。回合计时排除环境对象构造及结束后的排程提取。
+- `src/ppo_rs/train.py`：training_history逐回合保存三项耗时及terminated／truncated；每个rollout块仅最后一行保存ppo_update_wall_seconds。多卡更新耗时以MAX归约。validation_history保存每实例平均耗时和validation_wall_seconds，后者包含环境构造、排程提取和聚合；控制台显示耗时。
+- `scripts/evaluate_dataset.py`、`scripts/compare_observation_runs.py`：汇总逐实例平均及总回合耗时，历史数据缺字段时不补造计时。
+- `tests/test_timing.py`、`tests/test_timing_reports.py`、`tests/test_evaluate_dataset_profiles.py`、`tests/test_distributed_training.py`：确定性模拟时钟、实际MLP／GNN、静态／动态、规则、CUDA边界、多进程日志保存、历史缺字段续训及CLI汇总检查。
+- `docs/timing.md`：说明字段、范围、保存位置、正常完工筛选及比较方法。未修改训练超参数、动作／奖励或现有训练进程。
+
+## Tests Run
+
+- 完整pytest：130 passed in 33.44s，使用datascience Python，OMP_NUM_THREADS=2、MKL_NUM_THREADS=2。
+- 模拟时钟验证reset、构图、决策、环境推进、buffer和最终指标均计入回合时长；验证排程提取在回合计时外、在整轮验证计时内。
+- CPU真实MLP／GNN在静态及动态实例中，训练采样和确定性验证排程与目标一致、无约束违规。
+- 两rank CPU短训练及续训通过：计时保存到JSON、更新时长各rank一致；移除旧行计时字段后仍可续训，历史不变，新行具备计时。
+- 三种输入profile的评估CLI通过，模型和规则方法的逐实例、平均与总耗时字段均保存。
+- git diff --check通过；当前dataset2 MLP launcher和8个rank仍正常运行。
+
+## Risks and Rollback Notes
+
+- 截断回合也记录耗时，统计成功完工应筛选terminated=true、truncated=false并核对约束违规。
+- policy_inference_seconds包含act内部输入转换／GNN批处理及Actor／Critic计算；GNN环境构图另计，完整回合总耗时包含两者。
+- 首次运行／预热、硬件、CPU线程和共同运行负载都会影响实际耗时，本轮保留实际观测值，不做扣除。
+- 多卡并行采样的回合耗时之和不代表训练经过的总时间；PPO更新耗时另计，外围通信、保存和绘图不计入回合。
+- 旧历史无法追溯补算计时，当前运行Python不会热更新。本轮未重启或恢复现有训练。
+- 回滚只需移除本轮计时接入与文档；新JSON字段为附加指标，checkpoint格式未要求迁移。
+
+## Follow-ups
+
+None
+
+---
+
+Doc-ID: IMPL-2026-11-05-006
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 缩短每组试验的训练时间，例如本次GNN和MLP训练
+Activated-Skills: code-agent-core
+
+## Summary
+
+- 实现保持现有网络、数据、全局batch64、rollout10、PPO4轮和20k预算的单组训练优化。
+- 验证按实例分配到所有rank，保留seed与原顺序，统一汇集指标、排程和异常。
+- PPO日志指标每rollout归约一次，候选动作和图批量传输；GNN使用CPU预生成的类型索引减少GPU同步。
+- 新增CPU／torchrun多卡短基准入口，独立输出并记录速度、耗时和硬件信息。
+- 完整141项测试及基准脚本CPU单／双进程冒烟通过；当前MLP未被中断、未宣称8卡整体加速倍数。
+
+## Assumptions
+
+- 本轮优先减少工程开销，保持原优化参数和数据协议，不通过减少训练预算获取速度收益。
+- 当前运行MLP使用启动时代码，自动热更新不成立；新代码用于后续启动／同world size恢复的运行。
+
+## Open Questions
+
+- 8卡全部空闲时的优化前后整体训练加速比尚待基准测量；采样和完整轨迹通信仍可能限制收益。
+
+## Plan Summary
+
+先并行实现多卡验证、PPO数据准备和日志通信、GNN索引前向，再对照旧前向／梯度和多进程行为；补充可重复短基准和使用说明，保持当前训练运行。
+
+## Changes (by file/module)
+
+- `src/ppo_rs/train.py`：验证全rank按全局索引分片，恢复原顺序，eval_seed按原索引计算；支持空分片，错误随结果一次汇集；验证墙钟取rank最大值，所有rank参与调用。
+- `algorithms/ppo.py`：mini-batch的梯度同步不变，仅将日志指标延后至rollout结束归约／读取；GNN图索引每epoch复制一次CPU，保留原GPU随机排列、填充和分片语义。
+- `algorithms/rollout_buffer.py`：CPU一次填充可变候选数组／mask，再整块传入设备，保持原dtype、GAE和内容。
+- `models/graph_batch.py`：先CPU拼接、按字段传输；CPU按类型分组生成节点／边索引，打包后搬到设备，避免逐图复制和前向逐类型GPU布尔判断。
+- `models/graph_actor_critic.py`、`graph_attention.py`：按索引执行，缺类型仍跳过模块；pool计数利用索引长度，不再读取mask.sum().item。兼容无预生成索引的手工GraphBatch。
+- `models/actor_critic.py`及GNN act：三个标量合并一次CPU读取，保持返回类型和网络参数结构。
+- `scripts/benchmark_training_speed.py`：固定更新块数和验证前缀的独立诊断入口；保留batch／rollout／架构，起始学习率和熵系数固定，支持checkpoint权重初始化；报告墙钟、steps/s、更新／验证耗时和GPU小时。
+- `tests/test_parallel_validation.py`、`test_ppo_performance.py`、`test_graph_performance.py`：验证串行与多进程一致、异常与空分片、缺关系梯度、原前向对照、buffer内容和归约次数。
+- `docs/training-speed.md`、`docs/timing.md`：记录使用方式、并行计时语义及现有限制。
+
+## Tests Run
+
+- 完整pytest：141 passed in 38.10s，OMP_NUM_THREADS=2、MKL_NUM_THREADS=2，CPU执行。
+- 对照旧GNN前向及反向：完整／缺关系／缺节点类型／空边均一致，state_dict键及checkpoint_kwargs相同，缺参数grad=None行为保持。
+- 现有MLP／GNN双rank PPO与单进程全局batch等价测试通过，含不均匀batch和填充；日志仅一次显式all_reduce。
+- 并行验证与串行结果对照通过，含MLP／GNN、静态／释放／故障、空rank、seed与RNG、异常传播；双rank训练／旧日志续训测试通过。
+- benchmark脚本CPU单rank和双rank各1更新块、2回合、1验证实例正常结束，报告落在outputs/speed_smoke_checks；验证正常完成、无截断。该极小样本只检验入口，不用于性能结论。
+- git diff --check通过；当前8卡MLP launcher及所有rank持续运行。
+
+## Risks and Rollback Notes
+
+- 未实测空闲8卡整体加速比，不承诺几倍或将21小时缩至某固定时长；局部通信减少不等于整体同比加速。
+- GPU动作读取和合法动作检查等仍可同步；本轮减少同步，未消除全部同步。
+- 使用不同索引原语或汇总顺序可能引入浮点末位差异；梯度和更新协议保持一致，不承诺训练轨迹逐位重现。
+- 保留find_unused_parameters=True，合法图可缺少关系，不能仅凭某次DDP警告关闭。
+- 当前采样仍单环境逐步运行，完整Python图轨迹仍all_gather_object复制；未自动扩大rollout、增大batch或引入异步策略。
+- checkpoint兼容但恢复仍要求原world size；本轮未重启当前MLP或改写历史训练结果。
+- 可逐模块恢复旧实现；训练超参数／数据／checkpoint无需迁移。
+
+## Follow-ups
+
+8卡空闲后使用独立短基准比较实际耗时，再决定是否实施多环境批量采样和轨迹通信重构。
+
+---
+
+Doc-ID: IMPL-2026-11-05-007
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 额外补齐基础state训练代码、预留动态接口并检查完整组代码
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 新增compact18全局profile，含基础14项＋共享动态4项；局部compact21，GNN节点13维，两阶段尺寸相同。
+- 新增基础／完整×MLP／GNN×静态／动态8份配置，非架构训练参数统一。
+- 新完整组采用unified23／enhanced25，即有效19全局＋4动态预留／25局部，静态到动态可直接载入各自权重。
+- 新启动器支持检查、数据规模／cost0选择、单模型或双模型、seed、卡数及安全独立输出；动态必须解析到静态来源。
+- 完整166项测试及实际dataset2两组静态预检通过；未启动正式训练或中断当前MLP。
+
+## Assumptions
+
+- 默认dataset2静态有成本，训练20k回合；动态独立10k回合。两组均预留相同事件状态，静态预留值为0。
+- “基础14／21、完整19／25”指静态有效信息，实际输入18／21与23／25用于保持静态到动态的结构一致。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+核对已有profile和历史配置，补基础动态保留profile及统一配置，以新入口安全绑定静态checkpoint，再验证可观测性、配对参数、完整静态到动态训练链路和评估兼容。
+
+## Changes (by file/module)
+
+- `src/ppo_rs/environment/fjsp_env.py`：新增compact18，基础直接拼接共享_dynamic_observation，跳过5项全局增强计算；旧compact14／enhanced19／unified23输出不变，图节点compact18为13维。
+- `configs/state_ablation/`：8份新配置，base_mlp_static等；base compact18／compact21，full unified23／enhanced25。默认batch64、rollout10、PPO4轮、8卡、unique输出，统一验证500、latest100、snapshot5000。
+- `scripts/train_state_comparison.py`：--group、--phase、--model、--dataset、--seed、--world-size、--device、--check、--output-root；动态显式--initialize-from／--static-run或唯一匹配同数据／组／模型／seed的静态best。单模型不要求另一来源，多个来源拒绝猜测；先CPU预检再训练。
+- `scripts/check_comparison.py`：按profile实际字段统计动态预留维数，兼容compact18。
+- 新tests：base_state_profile、state_ablation_configs、state_training、state_launcher；扩展动态可观测性和评估CLI测试以覆盖新profile和完整组。
+- `docs/state-ablation.md`、`models/README.md`及参数说明：启动命令、字段语义、checkpoint限制和旧完整组审计。
+
+## Tests Run
+
+- 完整pytest：166 passed in 40.28s；CPU，OMP_NUM_THREADS=2、MKL_NUM_THREADS=2。
+- 实际dataset2 base/full静态--check均通过，数据1000／100／200，组内MLP／GNN训练设置无差异；base18／21，full23／25，动态全局预留4、GNN节点预留2。
+- CPU四个组／模型组合静态训练、best保存、回载、故障动态评估、initialize_from微调均通过，正常完成且无违规，微调计数和optimizer重新开始。
+- compact18与compact14基础14项、unified23动态4项完全一致，静动态物理排程保持；隐藏工件／未来事件变化不改变可见输入。
+- launcher检查模式无CUDA检查和训练进程，支持唯一来源发现、缺来源／多来源拒绝、错误profile拒绝和单模型独立预检。
+- 旧dataset1完整配置审计确认batch64／32、rollout20／10、latest20／10不一致；旧配置保持历史，不作为新配对入口。
+- git diff --check及脚本语法检查通过，当前训练进程未被停止。
+
+## Risks and Rollback Notes
+
+- 未采用固定尺寸mask等容量消融，基础／完整输入参数量不同，文档列明；两组GNN保持相同图通道，能恢复部分被删摘要。
+- 旧dataset2为23／21，不能直接载入完整23／25；旧19／25和节点11维同样不兼容新动态预留输入，不做隐式扩展权重。
+- 动态JSON模板没有伪造initialize_from；必须经新launcher绑定来源，直接交给公共train且不加初始化参数会从头训练动态策略。
+- 显式外部来源只校验模型schema／权重，不保证训练数据／成本条件／seed来源匹配；正式实验应检查来源并等待静态结束。
+- 当前正在运行训练不会热加载新代码，未覆盖现有数据、配置快照、checkpoint和输出。
+- 可移除新templates／launcher并删除compact18分支回滚；旧profile和checkpoint无需迁移。
+
+## Follow-ups
+
+用户可使用--check核对后按文档启动新组；本轮未自动启动。

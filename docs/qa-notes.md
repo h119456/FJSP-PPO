@@ -306,3 +306,64 @@ unified23的后4维为故障机器比例、平均及最大剩余维修时间、�
 - `src/ppo_rs/train.py`：initialize_from与迁移校验。
 - `src/ppo_rs/environment/fjsp_env.py`：动态状态、图和事件执行。
 - `scripts/generate_dynamic_dataset.py`：当前dataset1生成设置。
+
+---
+
+Doc-ID: QA-2026-11-05-001
+Doc-Type: qa
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 总结MLP与GNN训练结果
+Activated-Skills: qa-basic
+
+## Summary
+
+- 本次 dataset2 静态、非零辅助成本实验中，最佳 GNN 在相同 100 个验证实例上的综合目标比最佳 MLP 低 13.63%，makespan 低 11.53%。
+- GNN 总额外成本低 25.48%，主要来自去应力减少；补偿次数和成本分别高 15.42% 和 22.46%。
+- GNN 完成 20,000 回合；MLP 按用户要求在记录到 18,660 回合时停止；两组最佳权重及记录已保存在各自 `_cost` 目录。
+- 结果来自 seed7 和验证集选出的最佳 checkpoint，尚未进行本轮固定 200 实例测试集评估与多训练种子复核。
+
+## Assumptions
+
+- 以两组 `best_evaluation.json` 比较最佳模型；其中数值为每个完整加工实例的均值。
+- 使用本轮实际配置 unified23/compact21，即全局 23 维、局部动作 21 维；不与新建完整组 23/25 实验混用。
+
+## Open Questions
+
+- 尚需在固定 200 实例测试集、多训练种子及其他规模上检验泛化与稳定性。
+- 旧日志缺少完整 episode 墙钟计时，推理速度需按新增统一计时方式重新评估。
+
+## Question
+
+总结 MLP 与 GNN 本轮训练结果。
+
+## Answer
+
+两组均使用 dataset2 静态非零成本数据（训练 1000、验证 100、测试 200），相同 seed7/eval_seed1007、8 个 DDP 进程及核心 PPO 超参数。全局 batch64、每次更新 10 回合、PPO4 轮、学习率 3e-4 到 5e-5、熵系数 0.02 到 0.005，计划预算 20,000 回合。综合目标为 $J=C_{\max}+0.5C_{\mathrm{relief}}+0.5C_{\mathrm{compensation}}$。
+
+| 最佳模型验证指标 | MLP | GNN | GNN 相对变化 |
+| --- | ---: | ---: | ---: |
+| 综合目标 | 70.1549 | 60.5911 | -13.63% |
+| Makespan | 59.6012 | 52.7263 | -11.53% |
+| 总额外成本 | 21.1074 | 15.7296 | -25.48% |
+| 去应力次数 | 55.16 | 38.32 | -30.53% |
+| 去应力成本 | 17.8344 | 11.7216 | -34.28% |
+| 补偿次数 | 14.20 | 16.39 | +15.42% |
+| 补偿成本 | 3.2730 | 4.0080 | +22.46% |
+
+100 个验证实例名称一一对应；GNN 综合目标胜 100/100，makespan 胜 97/100，总额外成本胜 79/100。两组均全部完成，未截断，工艺就绪违约与调度约束违约均为零。makespan 使用仿真时间单位，次数是跨实例均值，成本为数据集设定的成本单位。
+
+GNN 完成 20,000 回合、6,928,907 环境步，耗时约 21 小时 11 分；最佳在第 19,500 回合，末次验证目标 61.1110。MLP 记录到 18,660 回合、6,010,693 环境步，耗时约 2 小时 12 分；最佳在第 7,500 回合，末次验证第 18,500 回合目标 71.4402。MLP 最近保存权重为第 18,600 回合，不能将第 18,660 回合记录视为存在对应权重。
+
+GNN 在本次验证集上获得更好的解质量，其较少的去应力操作抵消了较高的补偿成本。MLP 在最佳点后未出现新的验证最优；GNN 后期仍有改进。相同核心超参数不等于相同参数量、输入信息或计算成本；两组最终实际回合数也不同，故不能将此作为严格等计算预算的架构优劣定论。
+
+旧日志中策略推理累计时间的单实例均值为 MLP 0.3081 秒、GNN 5.3669 秒，未覆盖完整仿真过程，也不是优化后统一基准。训练耗时为本次实际运行记录，不作为后续优化版本的固定速度结论。
+
+## References
+
+- `outputs/20261104_mlp_jingtai_data2_cost/best_evaluation.json`、`validation_history.json`、`config.json`、`checkpoint_summary.json`、`status.json`。
+- `outputs/20261104_gnn_attention_jingtai_data2_cost/best_evaluation.json`、`validation_history.json`、`config.json`、`status.json`。
+- `outputs/20261104_mlp_jingtai_data2_cost/artifact_merge_report.json`。
+- `data/dataset2/static/train/` 实例的 `objective` 字段。

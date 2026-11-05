@@ -311,3 +311,532 @@ Activated-Skills: parameter-sanity
 ### dataset2正式启动参数落实（2026-11-04）
 
 用户已授权创建固定目录并启动训练。`dataset2.json`与`dataset2_gnn.json`已落实上述推荐值；输出分别为`outputs/20261104_mlp_jingtai_data2`和`outputs/20261104_gnn_attention_jingtai_data2`，为直接写入指定目录，`output_dir_mode`改为`existing`。监督入口检查已有训练日志与checkpoint，避免重复启动覆盖。两模型分别20000全局回合、2000次PPO更新、global batch64/per-rank8、8卡，顺序为GNN后MLP。启动前真实配置配对校验通过。
+
+---
+
+Doc-ID: PARAM-2026-11-05-001
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 统一数据目录并扩充dataset1，补齐dataset2动态数据；用户确认两套容量均为1000／100／200
+Activated-Skills: parameter-sanity, code-agent-core
+
+## Summary
+
+- dataset_test保存原100／20／20的静态和动态数据；dataset1、dataset2的静态和动态均为1000／100／200。
+- 保留原物理／时间／成本分布；新增动态数据自动适配生产机器池与参考时长。
+- 原划分成员和旧文件字节不变，训练参数和正在运行的dataset2训练不变。
+
+## Assumptions
+
+- 容量指每个模式各自的实例数量；static和dynamic是配对场景，不是两份互不相干的数据。
+- 原dataset1小集作为可追溯子集保留在扩容版对应split中。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/generate_dataset.py`、`generate_dataset2.py`、`generate_dynamic_dataset.py`与`organize_datasets.py`。
+
+## Parameter Table
+
+| 参数／字段 | 类型 | 默认／当前值 | 范围／单位 | 依赖 |
+|---|---|---|---|---|
+| 新版split_sizes | dict[str,int] | train1000、validation100、test200 | 正整数，实例 | 两模式同名文件配对 |
+| dataset_test容量 | dict[str,int] | 100／20／20 | 历史固定 | 字节保留 |
+| dataset1扩容seed | int | 20261105 | 随机种子 | split另加独立偏移 |
+| dataset1动态seed | int | 20261103 | 随机种子 | 旧轨迹原样保留，新增按同协议 |
+| dataset2静态seed | int | 20261030 | 随机种子 | 既有数据不重新生成 |
+| dataset2动态seed | int | 20261105 | 随机种子 | 固定评估轨迹按split偏移 |
+| scenario_probabilities | dict[str,float] | 无事件.65／插单.20／故障.10／混合.05 | 非负、总和1 | 固定评估按比例分层 |
+| delayed_job_count_range | list[int] | 1～2 | 工件 | 最少保留1件初始可见 |
+| 插单count_probabilities | dict | 1:.90／2:.10 | 概率 | 有插单的场景内条件分布 |
+| event_count_range | list[int] | 1～2 | 次故障 | 故障机器不重复、限实际生产池 |
+| 故障count_probabilities | dict | 1:.95／2:.05 | 概率 | 有故障的场景内条件分布 |
+| release_time_fraction | list[float] | .05～.30 | 参考时长比例 | 每实例参考时长 |
+| breakdown_time_fraction | list[float] | .15～.70 | 参考时长比例 | 每实例参考时长 |
+| repair_duration_factor | list[float] | .50～1.50 | 平均加工时长倍数 | 每实例加工时间均值 |
+| machine_pool | list[str] | 实例公开普通设备 | 4台或6～10台 | 排除M3／M4 |
+| target_root | Path | dataset1/static或dynamic | 输出目录 | 非空时拒绝覆盖 |
+
+## Constraint Rules
+
+- 新版validation场景65／20／10／5，test场景130／40／20／10；旧集保持12／5／2／1。
+- 隐藏事件不可见；维修采用pause_resume；训练重新采样、评估固定轨迹。
+- 不跨split移动旧样本；去名称和事件后的基础实例内容在各split间查重。
+- 不把dataset_test作为新版dataset1之外的独立泛化集；两者有明确保留关系。
+- 训练episode、学习率、batch、保存间隔均不因本次数据扩容自动改变。
+
+## Preset Profiles
+
+- safe：dataset_test，100／20／20，用于代码检查和短实验。
+- balanced：dataset1，1000／100／200，保持6～10工件的小规模问题分布。
+- high：dataset2，1000／100／200，12～20工件及6～10台生产设备。
+
+## Validation Notes
+
+- 六个静态／动态子集容量与配对校验通过，旧数据SHA256核对一致。
+- 固定与随机动态抽样共276次规则排程无违规；100项pytest通过。
+- 同样1～2个事件在dataset2中相对扰动较低；事件强度未随规模暗中增加。
+
+---
+
+Doc-ID: PARAM-2026-11-05-002
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 分别生成新版dataset1和dataset2的cost0静态／动态数据，额外费用为0、时间占用不变
+Activated-Skills: parameter-sanity, code-agent-core
+
+## Summary
+
+- dataset1_cost0与dataset2_cost0各包含static/dynamic，每个模式1000／100／200。
+- 仅实例stress_relief.cost及compensation.cost置0.0，时长、事件、目标权重不变。
+- 原始有成本数据只读；逐实例源哈希与严格字段对照可验证。
+
+## Assumptions
+
+- cost0表示额外费用为零，操作仍占用设备且执行物理状态变换。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/make_zero_cost_dataset.py`从规范静态／动态family派生，不重新随机生成基础问题。
+
+## Parameter Table
+
+| 字段／参数 | 类型 | 当前值 | 单位／约束 |
+|---|---|---|---|
+| stress_relief.cost | float | 0.0 | 每次去应力额外费用 |
+| compensation.cost | float | 0.0 | 每次补偿额外费用，包含原机／专用机 |
+| source-root | Path | data/dataset1或dataset2 | 只读，含static/dynamic |
+| target-root | Path | data/dataset1_cost0或dataset2_cost0 | 与源分离且非空时拒绝覆盖 |
+| split_sizes | dict | 1000／100／200 | 每模式，与源逐文件配对 |
+| 去应力时长 | float | 原值0.26～0.78 | 时间单位，不修改 |
+| 补偿时长 | float | 原值0.6～1.2 | 时间单位，不修改 |
+| 目标权重 | dict | makespan1.0、两辅助费用各0.5 | 不修改 |
+
+## Constraint Rules
+
+- 只允许两费用字段变化；所有实例名称、文件名、split、工序、物理参数及动态事件完全相同。
+- manifest的费用范围对应更新为[0,0]，保留源manifest哈希和实例哈希。
+- 当前等待费用为0，正常完成时目标等于makespan；不能据此删除去应力或补偿的时间占用。
+- 不改变正在运行的有成本训练，不自动启动cost0训练。
+
+## Preset Profiles
+
+- safe：先用临时目标和源样本验证，只读源，不覆盖已有数据。
+- balanced：dataset1_cost0，小规模1300静态＋1300动态。
+- high：dataset2_cost0，大规模1300静态＋1300动态。
+
+## Validation Notes
+
+全部5200派生实例严格字段对照通过；静态／动态相同行为序列的时钟和排程除费用外一致。
+
+---
+
+Doc-ID: PARAM-2026-11-05-003
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 生成dataset3与dataset3_cost0，18～30工件、6～13工序、12～18设备，其余保持一致
+Activated-Skills: parameter-sanity, code-agent-core
+
+## Summary
+
+- dataset3及cost0各含static/dynamic，各模式1000／100／200。
+- 总设备12～18台，含M3／M4，普通设备10～16台。
+- 除规模及相应辅助操作允许位置／次数外，沿用dataset2工艺、费用、目标及环境参数。
+
+## Assumptions
+
+- “设备数”沿用前文口径，指包含两台辅助设备的总数。
+- 工序数为每工件普通加工工序数量。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/generate_dataset3.py`复用dataset2实例生成逻辑，动态和cost0复用既有通用生成器。
+
+## Parameter Table
+
+| 参数 | 类型 | 默认／范围 | 单位／依赖 |
+|---|---|---|---|
+| split_sizes | dict | 1000／100／200 | 每个static或dynamic模式 |
+| job_count_range | list[int] | 18～30 | 工件，边际均衡 |
+| operation_count_range | list[int] | 6～13 | 每工件普通工序 |
+| total_machine_count_range | list[int] | 12～18 | 含M3、M4 |
+| normal_machine_count_range | list[int] | 10～16 | 普通加工设备 |
+| candidate_machine_count_range | list[int] | 2～5 | 单工序候选，沿用dataset2 |
+| 辅助max_per_job | int | 12 | 13道工序对应最多12个工序间隙 |
+| allowed_after_operations | list[str] | O1～O12 | 去应力及补偿允许位置 |
+| 静态seed | int | 20261106 | 独立split偏移 |
+| 动态seed | int | 20261107 | 固定评估轨迹；train按reset种子 |
+| 普通时长／变形A／B | float | 1.5～5.0／.18～.45／.080～.250 | 原分布 |
+| 去应力费用／时长 | float | .12～.48／.26～.78 | cost0费用为0，时长不变 |
+| 补偿费用／时长 | float | .1～.4／.6～1.2 | cost0费用为0，时长不变 |
+| 环境max_decisions／max_time | int／float | 5000／1000 | 沿用dataset2 |
+| 动态场景概率 | dict | .65／.20／.10／.05 | 无事件／插单／故障／混合 |
+
+## Constraint Rules
+
+- 同split和文件名的static／dynamic以及cost0逐实例配对，不交叉混入train／test。
+- 动态事件仍每类1～2次，参考时长与机器池按实际规模计算。
+- cost0仅修改两费用，不改变任何实例时长、设备占用、事件或物理参数。
+- 设备清单中的M3／M4不加入普通工序候选，故障只针对普通设备。
+- 新增生成器拒绝覆盖已有非空目录；共享dataset2默认生成结果保持完全一致。
+
+## Preset Profiles
+
+- safe：利用split_sizes参数生成临时小容量验证数据，规模范围不变。
+- balanced：dataset3/static或dynamic，各1300实例。
+- high：dataset3和dataset3_cost0配对比较，包含两模式共5200实例。
+
+## Validation Notes
+
+完整容量、范围、配对、内容查重、固定场景及cost0逐字段校验通过；全量dataset2原实例生成复现确认兼容。
+
+---
+
+Doc-ID: PARAM-2026-11-05-004
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 参考本次GNN训练评估早停／加速，以及GPU相对CPU提升有限的原因
+Activated-Skills: parameter-sanity
+
+## Summary
+
+- 本次GNN共20000回合、6928907步、21小时11分钟，最佳验证目标60.5911出现在19500回合。
+- 截取原曲线至10000／16000回合，最佳目标比全程最佳分别差3.44%／0.95%，不能认定早期已充分收敛。
+- 8卡全局batch64使每卡仅8样本；单图推理、GPU标量同步、CPU构图、Python轨迹汇集及rank0串行验证限制吞吐。
+- 建议优先做保持学习语义的工程优化，再用同条件CPU／1／2／4／8卡短基准选择资源；本轮不改配置或当前训练。
+
+## Assumptions
+
+- 结论来自dataset2静态、seed7这一次训练，验证集100实例，目标越低越好。
+- 旧运行无完整episode／更新／整轮验证计时字段，亦无同设置CPU／GPU基准；代码可定位开销来源，不能精确归因耗时百分比。
+
+## Open Questions
+
+- 批量推理、缓存、减少同步和不同卡数的实测收益，需使用新增计时与短基准确认。
+
+## Context (system/module)
+
+读取`outputs/20261104_gnn_attention_jingtai_data2`的固定配置、训练／验证历史和状态，以及训练、图网络与图批处理代码。本轮仅分析和记录建议，不实现早停、不启动训练。
+
+## Parameter Table
+
+| 现有参数 | 类型 | 本次值 | 候选／单位／依赖 |
+|---|---|---|---|
+| episodes | int | 20000 | 正式参考保持20000；开发可考虑16000回合，需重新评估解质量 |
+| validation_interval | int | 500 | 保持500回合；须与episodes_per_update整除关系兼容 |
+| distributed_world_size | int | 8 | 短基准比较1、2、4、8，与实际进程数一致 |
+| mini_batch_size | int | 64 | 全局样本数；1／2／4／8卡分别64／32／16／8样本每卡 |
+| episodes_per_update | int | 10 | 全局回合数；8卡分配2、2、1、1、1、1、1、1，各卡回合大小也不同 |
+| ppo_epochs | int | 4 | 每个rollout的优化轮数，先保持，减少会改变学习过程 |
+| hidden_dim | int | 128 | 先保持；缩小改变容量，不属于保持架构的工程加速 |
+| gnn_layers／attention_heads | int | 2／4 | 代码要求两层；hidden_dim必须能被heads整除 |
+| learning_rate／final_learning_rate | float | 3e-4／5e-5 | 随总回合预算线性变化，改episodes也会改变途中学习率 |
+| entropy_coef／final_entropy_coef | float | .02／.005 | 随总回合预算线性变化，改episodes也会改变途中探索强度 |
+
+## Constraint Rules
+
+- 当前未实现early-stop配置字段；不得仅向JSON加入不存在的参数并声称已生效。
+- 可供后续实现的保守停止规则：至少10000回合、每500回合验证，显著改善定义为相对0.1%，连续8次验证无显著改善再停，并始终保留真正最佳的有效checkpoint。该规则回放本次曲线不会提前停止。
+- 激进规则“至少5000回合、连续4次验证无任何改善”会在9000回合误停，当时最佳64.0376，比全程最佳差5.69%。
+- 停止判断仅使用固定验证集，不使用测试集；MLP／GNN正式对比应统一预算或使用预先规定的同一停止规则，并报告实际计算量。
+- 本次16000回合截断点的0.95%差距是单seed事后观察。直接把episodes改为16000会同时压缩学习率／熵系数日程，不保证复现原曲线同一回合的表现。
+- 参数更新、GPU卡数变化可改变浮点归约和训练轨迹；扩大batch、改变episodes_per_update或减少ppo_epochs会进一步改变优化过程，应独立验证。
+- 实际launch进程数与distributed_world_size必须一致；速度比较统一数据、线程设置、预热方式和外部计算负载。
+
+## Preset Profiles
+
+- safe／正式参考：原20000回合、batch64、10回合更新、PPO4轮、验证500；使用best.pt。用于保持本次预算口径。
+- balanced／开发预算：可考虑16000回合，其余相同，接受重新验证质量及日程变化。减少20%回合不等于已测得减少20%墙钟时间。
+- throughput-study／资源选择：先保持20000回合日程和其他优化参数，以短跑比较CPU及1／2／4／8卡的相同工作量；不得假定8卡最快。短跑只用于吞吐诊断，不作为收敛质量结论。
+
+## Validation Notes
+
+- Python读取完整40次验证记录并回放两种停止规则；截取10000／15000／16000／19000回合的最佳值为62.6761／61.4391／61.1688／60.6769，相对最终最佳差3.44%／1.40%／0.95%／0.14%。
+- 由2000个更新块的rollout_steps计算，4轮PPO合计437032个全局mini-batch，每批触发DDP梯度同步和额外指标归约。
+- 每500回合验证100实例，共40轮4000实例；最后一轮policy_inference_seconds均值5.0257秒，仅策略部分100实例合计502.57秒，不能据此准确回推全程占比。
+- 未运行新的CPU／GPU基准、未改训练源代码／配置、未中断当前MLP；无需为本次分析重跑实现测试。
+
+---
+
+Doc-ID: PARAM-2026-11-05-005
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 如何充分利用8张GPU加快MLP与GNN训练
+Activated-Skills: parameter-sanity
+
+## Summary
+
+- 8卡加速单次训练与8卡提高整组实验吞吐是不同目标；小模型和全局batch64下，应先比较多任务单卡／双卡方案。
+- 保持现有优化参数时，优先并行验证、减少GPU标量同步、缓存固定图信息和合并CPU到GPU的数据搬运。
+- 多环境批量采样需要改代码，并正确维护独立轨迹和on-policy边界；当前全局10回合无法支撑每卡多个完整回合的大批量供数。
+- 8卡batch256／每40回合更新可作为新吞吐候选，不能保证解质量不变；本轮未更改配置或当前运行。
+
+## Assumptions
+
+- 当前机器有8张A800 80GB，正在运行的MLP仍使用8卡，建议实施于后续实验。
+- 训练目标、网络、state与动作特征保持当前口径；新参数仅为待测候选。
+
+## Open Questions
+
+- CPU／1／2／4／8卡同工作量短基准，以及多任务总吞吐尚未实测，不能预报加速倍数。
+
+## Context (system/module)
+
+当前采样每rank串行运行分配到的完整回合，每步单图推理；每10个全局回合进行一次PPO更新，完整轨迹用all_gather_object复制到所有rank；验证仅rank0顺序执行100实例。MLP约9.2万参数，GNN约100万参数。
+
+## Parameter Table
+
+| 现有字段 | 类型 | 当前值 | 推荐比较值／约束 |
+|---|---|---|---|
+| distributed_world_size | int | 8 | 单实验1、2、4、8；必须与实际进程数一致 |
+| mini_batch_size | int | 64 | 全局值；新8卡吞吐候选256，对应每卡32 |
+| episodes_per_update | int | 10 | 保持口径先不改；新8卡候选40，对应每卡5完整回合 |
+| episodes | int | 20000 | 保持，40回合块下为500个更新块 |
+| ppo_epochs | int | 4 | 先保持，减少轮数会改变学习过程 |
+| validation_interval | int | 500 | 原参数方案保持500；40回合块候选改1000 |
+| latest_checkpoint_interval | int | 100 | 原方案100；40回合块候选200 |
+| checkpoint_interval | int | 5000 | 两方案均兼容 |
+| seed | int | 7 | 独立任务使用预先指定的多个seed，两种模型配对 |
+| output_dir | Path | 两固定运行目录 | 新任务使用独立新目录，禁止覆盖当前结果 |
+
+## Constraint Rules
+
+- 每卡64样本等于8卡全局512，不能将其当作当前全局64的无损并行化。
+- 每40回合更新时，验证1000、latest200和snapshot5000均为40的倍数；原验证500和latest100不兼容此更新边界。
+- 同轨迹量下batch256相比64减少约四分之三mini-batch优化步数；rollout40相比10降低策略更新频率，因此必须重新比较验证质量，双方采用一致训练协议。
+- 先保留学习率／熵系数及其日程，不根据卡数机械放大学习率；20k预算保持不变。
+- 同步多环境采样需在整个采样块固定策略版本，分别保存各轨迹并计算GAE，再组成全局更新；不能将交错环境步当作连续轨迹，也不能将8卡预算乘8。
+- 并行验证固定实例与seed，汇总保持原顺序、均值和可行性判定。验证前后模型／随机数状态的影响应明确处理；设备变化可能产生数值差异，不承诺逐位一致。
+- 现有checkpoint恢复要求原world size；改卡数应启动独立新运行，不能直接以不同world size恢复当前分布式checkpoint并假定等价。
+- 环境多进程要限制每进程CPU线程并实测供数速度；不可只提高OMP线程数并期待Python循环同比加速。
+- nvidia-smi利用率含内核运行／通信等待，NCCL等待也可能显示高值，不能只据此判断有效算力利用。
+
+## Preset Profiles
+
+- safe／实验吞吐：8个独立单卡任务，distributed_world_size=1，每任务batch64、rollout10、PPO4轮、验证500。可安排MLP4seed＋GNN4seed；先短跑确认单卡吞吐和CPU／内存承载，未保证整组最快。
+- balanced／实验吞吐：4个独立双卡任务，每任务world_size=2，其余优化参数同safe；与单卡组对比单位时间完成的独立实验数量，而非只看单任务延迟。
+- high／单任务8卡新方案：world_size=8、batch256、rollout40、PPO4轮、验证1000、latest200、snapshot5000、episodes20000；须配合并行验证及批量采样工程实现，并作为新的优化设定验证。
+
+## Validation Notes
+
+- 代码审阅确认全局batch64的满批在8卡各8样本；10回合静态轮转分配为2、2、1、1、1、1、1、1，存在负载不均。
+- 代码确认网络内部torch.any的Python分支、mask.sum().item及逐步act返回标量导致CUDA同步；图批处理和rollout张量化多次逐项传输。
+- Python算术检查：20000／1000／200／5000均能被40整除，256能被8整除。
+- 推荐短基准报告采样steps/s、PPO更新秒、整轮验证秒、总墙钟、GPU小时和验证目标；CPU/GPU及不同卡数组使用相同数据和工作量，计入预热策略与共同负载。
+- 本轮只检查代码、配置及瞬时资源信息，未运行新的基准或更改训练代码，无需重跑实现测试。
+
+---
+
+Doc-ID: PARAM-2026-11-05-006
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 实施保持训练超参数的单组多GPU工程加速及独立短基准
+Activated-Skills: parameter-sanity, code-agent-core
+
+## Summary
+
+- 正式训练的batch64、rollout10、PPO4轮、20k预算、学习率和熵系数不变。
+- 多卡验证及同步／搬运优化默认生效，不引入新的训练调参项。
+- 新短基准仅使用配置副本，创建独立输出，用于计量吞吐，不用于判断收敛。
+
+## Assumptions
+
+- 基准数据、checkpoint、线程和外部负载统一后才比较速度；不与当前8卡MLP争抢设备。
+
+## Open Questions
+
+空闲8卡整体加速比待测。
+
+## Context (system/module)
+
+`scripts/benchmark_training_speed.py`复用train，支持CPU、单GPU及torchrun；详细说明见docs/training-speed.md。
+
+## Parameter Table
+
+| CLI参数 | 类型 | 默认／范围 | 单位与依赖 |
+|---|---|---|---|
+| config | Path | 必填 | 只读源配置 |
+| output | Path | 必填 | 新建唯一基准目录的父路径 |
+| updates | int | 2，正整数 | 更新块；episodes=updates×原episodes_per_update |
+| validation-instances | int | 16，正整数 | 实例；固定验证路径前缀，不足则用全部 |
+| device | str | 默认源配置 | cpu／cuda等，必须与可用硬件一致 |
+| checkpoint | Path或None | None | 只加载权重，不恢复optimizer或计数 |
+
+## Constraint Rules
+
+- 基准world size取实际进程数，配置副本中的distributed_world_size同步，源文件不变。
+- 基准validation／latest／snapshot间隔等于短跑总回合，只在结尾验证和保存；PPO epoch、全局batch、rollout与架构保持源配置。
+- 基准学习率与熵系数固定在源配置的起始值，不将原20k衰减日程压入几回合；不能据此推断正式训练效果。
+- 原配置initialize_from移除，只有显式--checkpoint生效；输出独立，不能覆盖原结果。
+- 总耗时包括train内部初始化／最终验证／文件写入，默认无独立预热，比较时重复并一致处理冷启动。
+- 正式训练恢复仍要求原world size；基准不同卡数使用新运行和可选权重初始化。
+
+## Preset Profiles
+
+- safe／入口检查：CPU、updates1、validation-instances1，使用小例子，验证端到端与报告。
+- balanced／快速诊断：实际8卡、updates5、validation-instances16，两模型分别测试。
+- high／稳定性复核：相同设置updates10、validation-instances100，重复测试并报告离散程度，避免外部GPU负载。
+
+## Validation Notes
+
+完整141项CPU测试通过；脚本单／双CPU进程冒烟通过；未测空闲8卡性能，当前MLP正常运行。
+
+---
+
+Doc-ID: PARAM-2026-11-05-007
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 完整全局19维／局部25维的state对照试验如何简化
+Activated-Skills: parameter-sanity
+
+## Summary
+
+- 推荐现有14／21作为基础，围绕19／25做全局与候选动作增强的2×2消融。
+- 全局去掉5项负载／机器可用性／立即派工统计，局部去掉4项相对速度／剩余工作量／候选压力／剩余放置时间摘要。
+- 保留工艺、变形、放置、辅助操作和合法动作机制；四组均从头训练、统一数据和预算。
+- 当前dataset2运行是23／21，静态后4维恒零，仍不是19／25完整输入组。
+
+## Assumptions
+
+- “局部25维”指每个候选动作的action_features，GNN另有节点／边输入。
+- 首先在dataset2静态有成本条件下隔离输入增强贡献，不同时改变成本或事件分布。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+环境现有compact14／enhanced19全局profile、compact21／enhanced25候选profile；无需新增维度定义即可构造四组，但14／25暂没有独立现成配置文件。
+
+## Parameter Table
+
+| 组别 | observation_profile | action_feature_profile | 维度／解释 |
+|---|---|---|---|
+| 基础 | compact14 | compact21 | 14／21，两类增强均去掉 |
+| 仅全局增强 | enhanced19 | compact21 | 19／21，基础＋全局5项 |
+| 仅局部增强 | compact14 | enhanced25 | 14／25，基础＋候选4项 |
+| 完整 | enhanced19 | enhanced25 | 19／25，两类增强均保留 |
+
+全局删除：remaining_processing_load_ratio、max_job_remaining_load_ratio、max_machine_availability_gap、machine_availability_gap_std、dispatchable_job_ratio。候选删除：relative_fastest_duration_score、job_remaining_workload_ratio、machine_candidate_pressure、normalized_remaining_dwell_time。
+
+## Constraint Rules
+
+- 保留14维中已有进度、忙闲、就绪、放置、变形、去应力／补偿比例；21维中已有动作类型、时长、成本、工件进度、物理参数及辅助动作结果特征。此实验检验额外摘要贡献，不是完整去掉物理信息。
+- 相同模型内只改变选定输入组，其余数据、种子、网络宽度／层数、PPO参数、训练预算、checkpoint选择和测试集不变。各条件从头训练，至少3个配对训练seed。
+- 全局14／19的GNN节点维度均11，图输入通道应保持相同。GNN可从图中恢复部分被删摘要，不能将结果解释为彻底剥夺对应信息。
+- 直接删维会改变首层参数量，应报告参数量。严格等容量可保持19／25形状、将对应5／4维固定置零，并重新训练四组；该mask方案目前尚未实现为配置项。
+- 不修改合法动作、约束、安全筛选、物理模型或奖励；mask仍可能隐式透露约束信息，各组必须一致。
+- 本次dataset2两模型unified23／compact21，静态后4全局及2节点维为零；其信息类似19／21，但输入形状／参数量不同，不能直接充当19／25或精确19／21消融。
+- 后续动态对比应给基础与增强组同时保留同样4个动态全局字段（信息维度18／23）及同样图动态节点字段；需实现相应profile，现代码没有compact18。不能只给完整组事件信息。
+
+## Preset Profiles
+
+- safe／最低预算：14／21对19／25，只能判断联合增强收益，无法分离全局与局部贡献。
+- balanced／推荐：四组2×2，每个MLP／GNN至少3seed，固定dataset2静态有成本；共8种条件、24次训练。
+- high／容量控制：保持19／25形状，四组按信息组置零，至少3seed；固定GNN图输入，明确为增强特征可用性消融。
+
+## Validation Notes
+
+只读核对环境字段定义、get_observation／get_action_features和现有配置；两类增强分别是末5维与末4维。未修改代码／配置或启动实验。
+
+---
+
+Doc-ID: PARAM-2026-11-05-008
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 基础state训练代码与动态预留、完整组统一训练配置
+Activated-Skills: parameter-sanity, code-agent-core
+
+## Summary
+
+- compact18动态接口现已实现，基础实际18／21、完整23／25，静态有效14／21和19／25。
+- 两组GNN节点同13维；静态后4全局和后2节点为零，动态阶段填入相同公开事件信息。
+- 8份统一配置与launcher可用于dataset_test、dataset1／2／3及cost0，默认dataset2有成本。
+
+## Assumptions
+
+- 不修改当前实验，新增训练独立输出；现有训练预算20k作为新静态对照默认。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`configs/state_ablation/`与`scripts/train_state_comparison.py`，细节见docs/state-ablation.md。
+
+## Parameter Table
+
+| 参数 | 类型 | 静态／动态默认 | 约束与依赖 |
+|---|---|---|---|
+| observation_profile | str | base compact18；full unified23 | 同组两阶段不变 |
+| action_feature_profile | str | base compact21；full enhanced25 | 同组两阶段不变 |
+| episodes | int | 20000／10000 | 全局回合，不乘卡数 |
+| learning_rate→final | float | 3e-4→5e-5／1e-4→2e-5 | 同阶段两组两模型一致 |
+| entropy_coef→final | float | .02→.005／.01→.003 | 同上 |
+| mini_batch_size | int | 64 | 全局，8卡每卡8 |
+| episodes_per_update／ppo_epochs | int | 10／4 | 两阶段一致 |
+| validation／latest／snapshot间隔 | int | 500／100／5000 | 均可被10整除 |
+| hidden_dim；gnn_layers／heads | int | 128；2／4 | GNN宽度可被heads整除 |
+| world-size／device | int／str | 8／cuda | --check仅CPU预检，启动时才检查设备 |
+| seed／eval_seed | int | 7／1007 | --seed只改训练seed，评估固定 |
+| group／phase／model | str | 必填base或full／必填static或dynamic／both | 单模型mlp或gnn；both依次各用全部卡 |
+| dataset | str | dataset2 | 可选dataset_test及dataset1／2／3、对应cost0 |
+| output-root | Path | outputs/state_ablation | 数据／组／阶段／模型／seed下唯一运行目录 |
+| initialize-from／static-run | MODEL=Path | 动态显式提供或唯一发现 | 静态不接受，单模型只需本模型来源 |
+
+## Constraint Rules
+
+- 旧14、19维profile仍保留；不将compact14自动变成compact18，不静默修改旧checkpoint。
+- 静态与动态输入维度／profile／架构一致；动态仅继承权重，不继承optimizer、计数或历史。
+- 自动来源限定同dataset／group／model／seed；多个候选要求显式指定，缺来源拒绝启动。显式外部来源仅校验schema，需人工核对数据与实验条件。
+- 旧23／21 checkpoint不兼容full23／25；完整组必须使用新完整静态来源，禁止隐式替换旧训练结果。
+- 新group参数默认是直接删维消融，参数量base/full分别MLP90370／92162、GNN1001122／1002274；不是严格等容量。
+- 所有模板动态initialize_from均空缺，由launcher绑定，不使用不存在的占位路径。直接调用公共train未传初始化则从头训练，推荐使用新入口。
+- 更新／验证／保存间隔检查、数据分离、输入维度及来源兼容检查在启动任何训练进程前完成。
+
+## Preset Profiles
+
+- safe／检查：--group base或full --phase static --check，默认dataset2，CPU检查不启动训练。
+- balanced／基础：base static，MLP／GNN各20k，8卡；完成后base dynamic各10k，显式相应best.pt。
+- full／完整：full static与dynamic同预算／优化参数，输入23／25；用于与基础配对比较，至少3seed。
+
+## Validation Notes
+
+166项完整测试、真实dataset2两组预检及四个组／模型的CPU静态到动态训练通过；未执行新的正式GPU实验。

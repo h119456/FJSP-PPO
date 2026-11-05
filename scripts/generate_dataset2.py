@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import random
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DATASET_ROOT = ROOT / "data" / "dataset2"
+DATASET_ROOT = ROOT / "data" / "dataset2" / "static"
 SEED = 20261030
 
 NORMAL_MACHINE_POOL = (
@@ -71,11 +72,18 @@ def _instance(
     number: int,
     job_count: int,
     normal_machine_count: int,
+    *,
+    operation_count_range: tuple[int, int] = (MIN_OPERATIONS, MAX_OPERATIONS),
+    normal_machine_pool: tuple[str, ...] = NORMAL_MACHINE_POOL,
+    name_prefix: str = "dataset2",
 ) -> dict[str, Any]:
-    normal_machines = NORMAL_MACHINE_POOL[:normal_machine_count]
+    min_operations, max_operations = operation_count_range
+    if not 1 <= normal_machine_count <= len(normal_machine_pool):
+        raise ValueError("normal machine count outside pool")
+    normal_machines = normal_machine_pool[:normal_machine_count]
     jobs = []
     for job_index in range(1, job_count + 1):
-        operation_count = rng.randint(MIN_OPERATIONS, MAX_OPERATIONS)
+        operation_count = rng.randint(min_operations, max_operations)
         jobs.append(
             {
                 "id": f"J{job_index}",
@@ -87,7 +95,7 @@ def _instance(
         )
 
     return {
-        "name": f"dataset2_{split}_{number:04d}",
+        "name": f"{name_prefix}_{split}_{number:04d}",
         "synthetic_test_data": True,
         "machines": [
             *normal_machines,
@@ -108,20 +116,20 @@ def _instance(
                 _rounded(rng, 0.1, 0.4, 1) * STRESS_RELIEF_COST_FACTOR,
                 2,
             ),
-            "max_per_job": MAX_OPERATIONS - 1,
+            "max_per_job": max_operations - 1,
             "allowed_after_operations": [
                 f"O{operation_index}"
-                for operation_index in range(1, MAX_OPERATIONS)
+                for operation_index in range(1, max_operations)
             ],
         },
         "compensation": {
             "enabled": True,
             "machines": {COMPENSATION_MACHINE: _rounded(rng, 0.6, 1.2, 1)},
             "cost": _rounded(rng, 0.1, 0.4, 1),
-            "max_per_job": MAX_OPERATIONS - 1,
+            "max_per_job": max_operations - 1,
             "allowed_after_operations": [
                 f"O{operation_index}"
-                for operation_index in range(1, MAX_OPERATIONS)
+                for operation_index in range(1, max_operations)
             ],
             "trigger_deformation": 0.30,
             "allow_original_machine": True,
@@ -148,11 +156,13 @@ def _instance(
     }
 
 
-def main() -> None:
-    rng = random.Random(SEED)
+def generate_dataset(target_root: Path = DATASET_ROOT, *, seed: int = SEED) -> dict[str, Any]:
+    if target_root.exists() and any(target_root.iterdir()):
+        raise FileExistsError(f"refusing to overwrite a non-empty dataset: {target_root}")
+    rng = random.Random(seed)
     split_sizes = {"train": 1000, "validation": 100, "test": 200}
     manifest: dict[str, Any] = {
-        "seed": SEED,
+        "seed": seed,
         "split_sizes": split_sizes,
         "job_count_range": [MIN_JOBS, MAX_JOBS],
         "operation_count_range": [MIN_OPERATIONS, MAX_OPERATIONS],
@@ -188,7 +198,7 @@ def main() -> None:
     }
 
     for split, size in split_sizes.items():
-        directory = DATASET_ROOT / split
+        directory = target_root / split
         directory.mkdir(parents=True, exist_ok=True)
         files = []
         for number in range(1, size + 1):
@@ -211,10 +221,20 @@ def main() -> None:
             files.append(f"{split}/{filename}")
         manifest["splits"][split] = files
 
-    (DATASET_ROOT / "manifest.json").write_text(
+    (target_root / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+
+    return manifest
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--target-root", type=Path, default=DATASET_ROOT)
+    parser.add_argument("--seed", type=int, default=SEED)
+    args = parser.parse_args()
+    generate_dataset(args.target_root, seed=args.seed)
 
 
 if __name__ == "__main__":

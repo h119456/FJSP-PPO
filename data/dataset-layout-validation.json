@@ -1,0 +1,155 @@
+{
+  "dataset_test": {
+    "static": {
+      "split_sizes": {
+        "train": 100,
+        "validation": 20,
+        "test": 20
+      },
+      "unique_instances": 140,
+      "job_count_range": [
+        6,
+        10
+      ],
+      "operations_per_job_range": [
+        4,
+        7
+      ],
+      "production_machine_count_range": [
+        4,
+        4
+      ]
+    },
+    "dynamic": {
+      "status": "ok",
+      "dataset_root": "/root/VLA/FJSP-PPO-cloud/data/dataset_test/dynamic",
+      "split_sizes": {
+        "train": 100,
+        "validation": 20,
+        "test": 20
+      },
+      "fixed_scenarios": {
+        "validation": {
+          "none": 12,
+          "job_release_only": 5,
+          "breakdown_only": 2,
+          "both": 1
+        },
+        "test": {
+          "none": 12,
+          "job_release_only": 5,
+          "breakdown_only": 2,
+          "both": 1
+        }
+      },
+      "fixed_events": {
+        "job_release": 12,
+        "machine_breakdown": 6
+      },
+      "unique_instances": 140,
+      "paired_static": "/root/VLA/FJSP-PPO-cloud/data/dataset_test/static"
+    }
+  },
+  "dataset1": {
+    "static": {
+      "split_sizes": {
+        "train": 1000,
+        "validation": 100,
+        "test": 200
+      },
+      "unique_instances": 1300,
+      "job_count_range": [
+        6,
+        10
+      ],
+      "operations_per_job_range": [
+        4,
+        7
+      ],
+      "production_machine_count_range": [
+        4,
+        4
+      ]
+    },
+    "dynamic": {
+      "status": "ok",
+      "dataset_root": "/root/VLA/FJSP-PPO-cloud/data/dataset1/dynamic",
+      "split_sizes": {
+        "train": 1000,
+        "validation": 100,
+        "test": 200
+      },
+      "fixed_scenarios": {
+        "validation": {
+          "none": 65,
+          "job_release_only": 20,
+          "breakdown_only": 10,
+          "both": 5
+        },
+        "test": {
+          "none": 130,
+          "job_release_only": 40,
+          "breakdown_only": 20,
+          "both": 10
+        }
+      },
+      "fixed_events": {
+        "job_release": 80,
+        "machine_breakdown": 48
+      },
+      "unique_instances": 1300,
+      "paired_static": "/root/VLA/FJSP-PPO-cloud/data/dataset1/static"
+    }
+  },
+  "dataset2": {
+    "static": {
+      "split_sizes": {
+        "train": 1000,
+        "validation": 100,
+        "test": 200
+      },
+      "unique_instances": 1300,
+      "job_count_range": [
+        12,
+        20
+      ],
+      "operations_per_job_range": [
+        5,
+        10
+      ],
+      "production_machine_count_range": [
+        6,
+        10
+      ]
+    },
+    "dynamic": {
+      "status": "ok",
+      "dataset_root": "/root/VLA/FJSP-PPO-cloud/data/dataset2/dynamic",
+      "split_sizes": {
+        "train": 1000,
+        "validation": 100,
+        "test": 200
+      },
+      "fixed_scenarios": {
+        "validation": {
+          "none": 65,
+          "job_release_only": 20,
+          "breakdown_only": 10,
+          "both": 5
+        },
+        "test": {
+          "none": 130,
+          "job_release_only": 40,
+          "breakdown_only": 20,
+          "both": 10
+        }
+      },
+      "fixed_events": {
+        "job_release": 81,
+        "machine_breakdown": 47
+      },
+      "unique_instances": 1300,
+      "paired_static": "/root/VLA/FJSP-PPO-cloud/data/dataset2/static"
+    }
+  }
+}

@@ -65,6 +65,10 @@ def _aggregate(rows: list[dict[str, Any]]) -> dict[str, Any]:
         f"mean_{key}": sum(float(row[key]) for row in rows) / len(rows)
         for key in sorted(numeric_keys)
     }
+    # The per-instance mean is already included above. The sum is actual
+    # serial scheduling time, excluding loading checkpoints, input files and plots.
+    if all("episode_wall_seconds" in row for row in rows):
+        result["total_episode_wall_seconds"] = sum(float(row["episode_wall_seconds"]) for row in rows)
     result.update(
         {
             "instance_count": len(rows),

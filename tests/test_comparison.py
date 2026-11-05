@@ -40,7 +40,7 @@ def test_matched_pair_reports_actual_input_and_capacity():
     assert result["models"]["gnn"]["local_mini_batch_size"] == 8
     assert result["models"]["gnn"]["distributed_world_size"] == 8
     assert result["models"]["gnn"]["parameter_count"] > result["models"]["mlp"]["parameter_count"]
-    assert result["datasets"]["mlp"]["train"]["instance_count"] == 100
+    assert result["datasets"]["mlp"]["train"]["instance_count"] == 1000
 
 
 def test_renamed_duplicate_across_splits_is_detected(tmp_path):

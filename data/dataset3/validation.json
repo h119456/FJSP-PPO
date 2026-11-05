@@ -1,0 +1,107 @@
+{
+  "status": "ok",
+  "dataset_root": "/root/VLA/FJSP-PPO-cloud/data/dataset3",
+  "static": {
+    "split_sizes": {
+      "train": 1000,
+      "validation": 100,
+      "test": 200
+    },
+    "unique_instances": 1300,
+    "job_count_range": [
+      18,
+      30
+    ],
+    "operations_per_job_range": [
+      6,
+      13
+    ],
+    "production_machine_count_range": [
+      10,
+      16
+    ]
+  },
+  "dynamic": {
+    "status": "ok",
+    "dataset_root": "/root/VLA/FJSP-PPO-cloud/data/dataset3/dynamic",
+    "split_sizes": {
+      "train": 1000,
+      "validation": 100,
+      "test": 200
+    },
+    "fixed_scenarios": {
+      "validation": {
+        "none": 65,
+        "job_release_only": 20,
+        "breakdown_only": 10,
+        "both": 5
+      },
+      "test": {
+        "none": 130,
+        "job_release_only": 40,
+        "breakdown_only": 20,
+        "both": 10
+      }
+    },
+    "fixed_events": {
+      "job_release": 85,
+      "machine_breakdown": 46
+    },
+    "unique_instances": 1300,
+    "paired_static": "/root/VLA/FJSP-PPO-cloud/data/dataset3/static"
+  },
+  "cost0": {
+    "status": "ok",
+    "source": "data/dataset3",
+    "target": "data/dataset3_cost0",
+    "modes": {
+      "static": {
+        "split_sizes": {
+          "train": 1000,
+          "validation": 100,
+          "test": 200
+        },
+        "instances": 1300,
+        "only_auxiliary_costs_changed": true
+      },
+      "dynamic": {
+        "split_sizes": {
+          "train": 1000,
+          "validation": 100,
+          "test": 200
+        },
+        "instances": 1300,
+        "only_auxiliary_costs_changed": true
+      }
+    }
+  },
+  "cost0_dynamic": {
+    "status": "ok",
+    "dataset_root": "data/dataset3_cost0/dynamic",
+    "split_sizes": {
+      "train": 1000,
+      "validation": 100,
+      "test": 200
+    },
+    "fixed_scenarios": {
+      "validation": {
+        "none": 65,
+        "job_release_only": 20,
+        "breakdown_only": 10,
+        "both": 5
+      },
+      "test": {
+        "none": 130,
+        "job_release_only": 40,
+        "breakdown_only": 20,
+        "both": 10
+      }
+    },
+    "fixed_events": {
+      "job_release": 85,
+      "machine_breakdown": 46
+    },
+    "unique_instances": 1300,
+    "paired_static": "data/dataset3_cost0/static"
+  }
+}

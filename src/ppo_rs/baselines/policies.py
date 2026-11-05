@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ppo_rs.environment import ResidualStressFJSPEnv
+from ppo_rs.timing import EpisodeTimer
 from ppo_rs.types import Action, ActionType
 
 
@@ -75,9 +76,9 @@ def run_baseline(
     if name not in BASELINES:
         raise KeyError(f"unknown baseline {name!r}; choose from {sorted(BASELINES)}")
     policy = BASELINES[name]
+    timer = EpisodeTimer()
     _, info = env.reset(seed=seed)
     terminated = truncated = False
-    inference = 0.0
     while not (terminated or truncated):
         actions = info["valid_actions"]
         if not actions:
@@ -85,9 +86,9 @@ def run_baseline(
             continue
         started = time.perf_counter()
         choice = policy(actions)
-        inference += time.perf_counter() - started
+        timer.policy_inference_seconds += time.perf_counter() - started
         _, _, terminated, truncated, info = env.step(choice)
-    metrics = env.get_metrics(inference)
+    metrics = timer.finish(env.get_metrics(timer.policy_inference_seconds))
     metrics["policy"] = name
     return metrics, env.get_schedule()
 

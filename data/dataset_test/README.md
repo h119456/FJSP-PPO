@@ -1,0 +1,8 @@
+# dataset_test
+
+static和dynamic各含100训练、20验证、20测试实例。
+
+同一split内按文件名静态／动态配对；dynamic训练事件每次reset重新采样，验证和测试事件固定。
+详细参数与生成来源见两个子目录的README和manifest。
+
+这是原dataset1静态和动态的完整历史归档；子目录README中的旧路径保留为历史记录，当前使用本目录的static/dynamic。dataset_test不是新版dataset1之外的独立测试集。

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -16,7 +17,7 @@ from ppo_rs.config import load_instance  # noqa: E402
 from ppo_rs.environment import ResidualStressFJSPEnv  # noqa: E402
 
 
-DATASET_ROOT = ROOT / "data" / "dataset2"
+DATASET_ROOT = ROOT / "data" / "dataset2" / "static"
 EXPECTED_SPLITS = {"train": 1000, "validation": 100, "test": 200}
 EXPECTED_RANGES = {
     "jobs": (12, 20),
@@ -45,8 +46,8 @@ def _record(observed: dict[str, list[float]], name: str, value: float) -> None:
     observed[name].append(value)
 
 
-def main() -> None:
-    manifest = json.loads((DATASET_ROOT / "manifest.json").read_text(encoding="utf-8"))
+def validate_dataset(dataset_root: Path = DATASET_ROOT) -> dict[str, Any]:
+    manifest = json.loads((dataset_root / "manifest.json").read_text(encoding="utf-8"))
     if manifest["split_sizes"] != EXPECTED_SPLITS:
         raise AssertionError(f"unexpected manifest split sizes: {manifest['split_sizes']}")
 
@@ -56,7 +57,7 @@ def main() -> None:
     smoke_paths: list[Path] = []
 
     for split, expected_count in EXPECTED_SPLITS.items():
-        paths = sorted((DATASET_ROOT / split).glob("*.json"))
+        paths = sorted((dataset_root / split).glob("*.json"))
         if len(paths) != expected_count:
             raise AssertionError(
                 f"{split}: expected {expected_count} files, found {len(paths)}"
@@ -146,7 +147,7 @@ def main() -> None:
             )
         smoke_results.append(
             {
-                "instance": path.relative_to(DATASET_ROOT).as_posix(),
+                "instance": path.relative_to(dataset_root).as_posix(),
                 "makespan": metrics["makespan"],
                 "readiness_violations": metrics["process_readiness_violations"],
             }
@@ -161,7 +162,14 @@ def main() -> None:
         },
         "scheduling_smoke": smoke_results,
     }
-    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    return summary
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--dataset-root", type=Path, default=DATASET_ROOT)
+    args = parser.parse_args()
+    print(json.dumps(validate_dataset(args.dataset_root), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

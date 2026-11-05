@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
 
 import torch
@@ -12,6 +13,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from ppo_rs.environment.fjsp_env import ResidualStressFJSPEnv
 from ppo_rs.models import batch_graph_states
+from ppo_rs.timing import EpisodeTimer
 
 from .rollout_buffer import RolloutBuffer
 
@@ -104,7 +106,11 @@ class PPO:
         if len(buffer) > 1:
             advantages = (advantages - advantages.mean()) / (advantages.std(unbiased=False) + 1e-8)
         sample_count = len(buffer)
-        totals = {"policy_loss": 0.0, "value_loss": 0.0, "entropy": 0.0, "updates": 0.0}
+        # Metrics do not affect gradients. Keep their sums on device and reduce
+        # once per rollout instead of synchronizing every mini-batch for logs.
+        totals = torch.zeros(3, dtype=torch.float64, device=self.model.device)
+        update_count = 0
+        requires_graph = bool(getattr(self.model, "requires_graph", False))
         for _ in range(self.config.ppo_epochs):
             if self.rank == 0:
                 permutation = torch.randperm(sample_count, device=self.model.device)
@@ -112,6 +118,9 @@ class PPO:
                 permutation = torch.empty(sample_count, dtype=torch.long, device=self.model.device)
             if self.world_size > 1:
                 dist.broadcast(permutation, src=0)
+            # Python graph objects need host indices. Copy the permutation
+            # once per epoch rather than waiting on CUDA for each mini-batch.
+            graph_permutation = permutation.detach().cpu().tolist() if requires_graph else None
             for start in range(0, sample_count, self.config.mini_batch_size):
                 indices = permutation[start : start + self.config.mini_batch_size]
                 global_count = indices.numel()
@@ -127,10 +136,16 @@ class PPO:
                     # tiny final batch has fewer samples than there are GPUs.
                     indices = indices[positions.remainder(global_count)]
                 graph_batch = None
-                if bool(getattr(self.model, "requires_graph", False)):
+                if graph_permutation is not None:
+                    graph_indices = graph_permutation[start : start + global_count]
+                    if self.world_size > 1:
+                        graph_indices = [
+                            graph_indices[position % global_count]
+                            for position in range(self.rank * local_count, (self.rank + 1) * local_count)
+                        ]
                     selected_graphs = [
                         data["graph_states"][index]
-                        for index in indices.detach().cpu().tolist()
+                        for index in graph_indices
                     ]
                     if any(graph is None for graph in selected_graphs):
                         raise ValueError("GNN rollout is missing graph states")
@@ -180,14 +195,13 @@ class PPO:
                 metrics = torch.stack([
                     policy_loss.detach(), value_loss.detach(), entropy_mean.detach()
                 ])
-                if self.world_size > 1:
-                    dist.all_reduce(metrics)
-                    metrics /= self.world_size
-                for key, value in zip(("policy_loss", "value_loss", "entropy"), metrics.tolist()):
-                    totals[key] += float(value)
-                totals["updates"] += 1.0
-        count = max(1.0, totals.pop("updates"))
-        return {key: value / count for key, value in totals.items()}
+                totals.add_(metrics.to(dtype=totals.dtype))
+                update_count += 1
+        if self.world_size > 1:
+            dist.all_reduce(totals)
+            totals /= self.world_size
+        values = (totals / max(1, update_count)).tolist()
+        return dict(zip(("policy_loss", "value_loss", "entropy"), values))
 
 
 def collect_episode(
@@ -199,6 +213,7 @@ def collect_episode(
 ) -> tuple[RolloutBuffer, dict[str, Any]]:
     """Collect one complete scheduling trajectory using the current policy."""
 
+    timer = EpisodeTimer(getattr(model, "device", None))
     observation, info = env.reset(seed=seed)
     buffer = RolloutBuffer()
     terminated = truncated = False
@@ -208,17 +223,19 @@ def collect_episode(
         if not actions:
             observation, _, terminated, truncated, info = env.step(0)
             continue
-        graph_state = (
-            env.get_graph_state(actions)
-            if bool(getattr(model, "requires_graph", False))
-            else None
-        )
+        graph_state = None
+        if bool(getattr(model, "requires_graph", False)):
+            graph_started = time.perf_counter()
+            graph_state = env.get_graph_state(actions)
+            timer.graph_construction_seconds += time.perf_counter() - graph_started
+        inference_started = time.perf_counter()
         choice, log_prob, value = model.act(
             observation,
             features,
             graph_state=graph_state,
             deterministic=deterministic,
         )
+        timer.policy_inference_seconds += time.perf_counter() - inference_started
         next_observation, reward, terminated, truncated, next_info = env.step(choice)
         buffer.add(
             observation,
@@ -231,4 +248,5 @@ def collect_episode(
             graph_state,
         )
         observation, info = next_observation, next_info
-    return buffer, env.get_metrics()
+    metrics = env.get_metrics(timer.policy_inference_seconds)
+    return buffer, timer.finish(metrics)

@@ -89,11 +89,15 @@ class DeformationFJSPEnv:
         "max_remaining_repair_time",
         "interrupted_job_ratio",
     )
+    COMPACT_DYNAMIC_OBSERVATION_NAMES = (
+        COMPACT_OBSERVATION_NAMES + DYNAMIC_OBSERVATION_NAMES
+    )
     UNIFIED_OBSERVATION_NAMES = (
         ENHANCED_OBSERVATION_NAMES + DYNAMIC_OBSERVATION_NAMES
     )
     OBSERVATION_PROFILES = {
         "compact14": COMPACT_OBSERVATION_NAMES,
+        "compact18": COMPACT_DYNAMIC_OBSERVATION_NAMES,
         "enhanced19": ENHANCED_OBSERVATION_NAMES,
         "unified23": UNIFIED_OBSERVATION_NAMES,
     }
@@ -1066,6 +1070,8 @@ class DeformationFJSPEnv:
         ]
         if self.observation_profile == "compact14":
             return observation
+        if self.observation_profile == "compact18":
+            return observation + self._dynamic_observation()
 
         remaining_job_workloads = []
         for job in self._active_job_specs():
@@ -1106,27 +1112,29 @@ class DeformationFJSPEnv:
         if self.observation_profile == "enhanced19":
             return observation
 
+        return observation + self._dynamic_observation()
+
+    def _dynamic_observation(self) -> list[float]:
+        """Public event state shared by compact and enhanced input schemas."""
+
         active_repairs = self._active_machine_repairs()
         remaining_repairs = list(active_repairs.values())
         interrupted_jobs = sum(
             job_id in self.jobs and machine_id in active_repairs
             for job_id, machine_id in self.interrupted_job_machine.items()
         )
-        observation.extend(
-            [
-                len(active_repairs) / max(1, len(self._known_production_machines())),
-                (
-                    sum(remaining_repairs) / len(remaining_repairs)
-                    if remaining_repairs
-                    else 0.0
-                )
-                / max(1.0, self._duration_scale),
-                max(remaining_repairs, default=0.0)
-                / max(1.0, self._duration_scale),
-                interrupted_jobs / job_count,
-            ]
-        )
-        return observation
+        return [
+            len(active_repairs) / max(1, len(self._known_production_machines())),
+            (
+                sum(remaining_repairs) / len(remaining_repairs)
+                if remaining_repairs
+                else 0.0
+            )
+            / max(1.0, self._duration_scale),
+            max(remaining_repairs, default=0.0)
+            / max(1.0, self._duration_scale),
+            interrupted_jobs / max(1, len(self.jobs)),
+        ]
 
     def _known_production_machines(self) -> frozenset[str]:
         if not self.instance.dynamic_events:

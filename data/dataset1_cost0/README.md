@@ -1,14 +1,7 @@
 # dataset1_cost0
 
-该数据集由`data/dataset`派生，仅进行以下修改：
+来源：`data/dataset1`；static和dynamic各含1000训练、100验证、200测试实例。
 
-- `stress_relief.cost = 0.0`；
-- `compensation.cost = 0.0`。
+只把去应力和补偿单次额外费用设为0，时间占用不变。目标权重不变；当前等待费用为0，因此正常完成排程的目标等于makespan。
 
-所有加工时间、M3/M4占用时间、变形参数、补偿阈值和目标函数权重保持不变。原数据集不会被修改。
-
-重新生成：
-
-```powershell
-python scripts/make_zero_cost_dataset.py
-```
+本数据与有成本版本逐实例配对，可用于成本消融；不得交叉混入训练和测试划分。

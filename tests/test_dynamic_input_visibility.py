@@ -38,7 +38,7 @@ def assert_same_inputs(left, right):
         np.testing.assert_array_equal(left_graph[key], right_graph[key], err_msg=key)
 
 
-@pytest.mark.parametrize("state_profile", ["compact14", "enhanced19", "unified23"])
+@pytest.mark.parametrize("state_profile", ["compact14", "compact18", "enhanced19", "unified23"])
 @pytest.mark.parametrize("action_profile", ["compact21", "enhanced25"])
 def test_hidden_job_parameters_routing_and_count_do_not_change_inputs(state_profile, action_profile):
     base = tiny_instance(jobs=2, compensation_threshold=10.0)

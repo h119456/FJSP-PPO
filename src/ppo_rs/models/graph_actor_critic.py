@@ -107,16 +107,25 @@ class GraphActorCritic(nn.Module):
             dtype=features.dtype,
             device=features.device,
         )
+        indices = graph.get("node_type_indices")
+        if indices is None:
+            indices = {
+                value: torch.where(types == value)[0]
+                for value in range(len(self.node_encoders))
+            }
         for node_type, encoder in enumerate(self.node_encoders):
-            mask = types == node_type
-            if torch.any(mask):
-                encoded[mask] = encoder(features[mask])
+            type_indices = indices.get(node_type)
+            if type_indices is not None and type_indices.numel() != 0:
+                encoded.index_copy_(
+                    0, type_indices, encoder(features.index_select(0, type_indices))
+                )
         for layer in self.message_layers:
             encoded = layer(
                 encoded,
                 graph["edge_index"],
                 graph["edge_types"],
                 graph["edge_features"],
+                graph.get("edge_type_indices"),
             )
         return encoded
 
@@ -130,8 +139,14 @@ class GraphActorCritic(nn.Module):
         node_types = graph["node_types"]
         batch_size = states.shape[0]
         pooled_types: list[torch.Tensor] = []
+        type_indices = graph.get("node_type_indices")
+        if type_indices is None:
+            type_indices = {
+                value: torch.where(node_types == value)[0]
+                for value in range(self.node_type_count)
+            }
         for node_type in range(self.node_type_count):
-            mask = node_types == node_type
+            indices = type_indices.get(node_type)
             sums = torch.zeros(
                 (batch_size, self.hidden_dim),
                 dtype=nodes.dtype,
@@ -140,13 +155,14 @@ class GraphActorCritic(nn.Module):
             counts = torch.zeros(
                 (batch_size, 1), dtype=nodes.dtype, device=nodes.device
             )
-            if torch.any(mask):
-                sums = sums.index_add(0, node_batches[mask], nodes[mask])
+            if indices is not None and indices.numel() != 0:
+                batches = node_batches.index_select(0, indices)
+                sums = sums.index_add(0, batches, nodes.index_select(0, indices))
                 counts = counts.index_add(
                     0,
-                    node_batches[mask],
+                    batches,
                     torch.ones(
-                        (int(mask.sum().item()), 1),
+                        (indices.numel(), 1),
                         dtype=nodes.dtype,
                         device=nodes.device,
                     ),
@@ -223,11 +239,10 @@ class GraphActorCritic(nn.Module):
             if deterministic
             else distribution.sample()
         )
-        return (
-            int(choice.item()),
-            float(distribution.log_prob(choice).item()),
-            float(values[0].item()),
-        )
+        values_to_return = torch.stack(
+            (choice.to(dtype=torch.float32), distribution.log_prob(choice), values[0])
+        ).cpu().tolist()
+        return int(values_to_return[0]), float(values_to_return[1]), float(values_to_return[2])
 
     def evaluate_actions(
         self,

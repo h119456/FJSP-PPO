@@ -43,7 +43,10 @@ class ActorCritic(nn.Module):
         distribution = Categorical(logits=logits)
         choice = torch.argmax(logits) if deterministic else distribution.sample()
         value = self.critic(state)
-        return int(choice.item()), float(distribution.log_prob(choice).item()), float(value.item())
+        # Return the three scalars with one device-to-host transfer rather than
+        # synchronizing separately for action, log probability and value.
+        result = torch.stack((choice.to(logits.dtype), distribution.log_prob(choice), value)).cpu().tolist()
+        return int(result[0]), float(result[1]), float(result[2])
 
     def evaluate_actions(
         self,

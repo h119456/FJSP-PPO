@@ -204,8 +204,11 @@ def _model_summary(config: dict[str, Any]) -> dict[str, Any]:
         "graph_edge_feature_dim": int(graph["edge_features"].shape[1]) if model.requires_graph else None,
         "graph_node_type_count": env.GRAPH_NODE_TYPE_COUNT if model.requires_graph else None,
         "graph_edge_type_count": env.GRAPH_EDGE_TYPE_COUNT if model.requires_graph else None,
-        "reserved_dynamic_state_dim": len(env.DYNAMIC_OBSERVATION_NAMES) if env.observation_profile == "unified23" else 0,
-        "reserved_dynamic_node_dim": len(env.GRAPH_DYNAMIC_NODE_FEATURE_NAMES) if model.requires_graph and env.observation_profile == "unified23" else 0,
+        "reserved_dynamic_state_dim": sum(name in env.OBSERVATION_NAMES for name in env.DYNAMIC_OBSERVATION_NAMES),
+        "reserved_dynamic_node_dim": (
+            env.GRAPH_NODE_FEATURE_DIM - env.GRAPH_BASE_NODE_FEATURE_DIM
+            if model.requires_graph else 0
+        ),
         "planned_rollout_updates": math.ceil(config["episodes"] / config["episodes_per_update"]),
         "distributed_world_size": config["distributed_world_size"],
         "global_mini_batch_size": config["mini_batch_size"],

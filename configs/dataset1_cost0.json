@@ -1,7 +1,7 @@
 {
-  "train_instances": "data/dataset1_cost0/train",
-  "eval_instances": "data/dataset1_cost0/validation",
-  "test_instances": "data/dataset1_cost0/test",
+  "train_instances": "data/dataset1_cost0/static/train",
+  "eval_instances": "data/dataset1_cost0/static/validation",
+  "test_instances": "data/dataset1_cost0/static/test",
   "output_dir": "outputs/dataset1_cost0_run1",
   "seed": 7,
   "eval_seed": 1007,

@@ -6,6 +6,7 @@ import time
 from typing import Any
 
 from ppo_rs.environment import ResidualStressFJSPEnv
+from ppo_rs.timing import EpisodeTimer
 from torch import nn
 
 
@@ -16,20 +17,20 @@ def evaluate_model(
     seed: int = 0,
     deterministic: bool = True,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    timer = EpisodeTimer(getattr(model, "device", None))
     observation, info = env.reset(seed=seed)
     terminated = truncated = False
-    inference = 0.0
     while not (terminated or truncated):
         actions = info["valid_actions"]
         features = info["action_features"]
         if not actions:
             observation, _, terminated, truncated, info = env.step(0)
             continue
-        graph_state = (
-            env.get_graph_state(actions)
-            if bool(getattr(model, "requires_graph", False))
-            else None
-        )
+        graph_state = None
+        if bool(getattr(model, "requires_graph", False)):
+            graph_started = time.perf_counter()
+            graph_state = env.get_graph_state(actions)
+            timer.graph_construction_seconds += time.perf_counter() - graph_started
         started = time.perf_counter()
         choice, _, _ = model.act(
             observation,
@@ -37,9 +38,9 @@ def evaluate_model(
             graph_state=graph_state,
             deterministic=deterministic,
         )
-        inference += time.perf_counter() - started
+        timer.policy_inference_seconds += time.perf_counter() - started
         observation, _, terminated, truncated, info = env.step(choice)
-    metrics = env.get_metrics(inference)
+    metrics = timer.finish(env.get_metrics(timer.policy_inference_seconds))
     metrics["policy"] = "ppo"
     return metrics, env.get_schedule()
 

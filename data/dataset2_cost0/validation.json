@@ -1,0 +1,25 @@
+{
+  "status": "ok",
+  "source": "data/dataset2",
+  "target": "data/dataset2_cost0",
+  "modes": {
+    "static": {
+      "split_sizes": {
+        "train": 1000,
+        "validation": 100,
+        "test": 200
+      },
+      "instances": 1300,
+      "only_auxiliary_costs_changed": true
+    },
+    "dynamic": {
+      "split_sizes": {
+        "train": 1000,
+        "validation": 100,
+        "test": 200
+      },
+      "instances": 1300,
+      "only_auxiliary_costs_changed": true
+    }
+  }
+}

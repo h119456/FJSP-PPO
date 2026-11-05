@@ -10,7 +10,7 @@ class DynamicDatasetTests(unittest.TestCase):
     def test_split_sizes_scales_and_event_modes(self) -> None:
         expected = {"train": 100, "validation": 20, "test": 20}
         for split, size in expected.items():
-            instances = load_instances(f"data/dataset_dynamic/{split}")
+            instances = load_instances(f"data/dataset_test/dynamic/{split}")
             self.assertEqual(len(instances), size)
             for instance in instances:
                 self.assertGreaterEqual(len(instance.jobs), 6)
@@ -23,14 +23,14 @@ class DynamicDatasetTests(unittest.TestCase):
                 self.assertEqual(instance.dynamic_events["mode"], expected_mode)
 
     def test_training_resamples_and_evaluation_traces_are_fixed(self) -> None:
-        train = load_instances("data/dataset_dynamic/train")
+        train = load_instances("data/dataset_test/dynamic/train")
         for instance in train:
             events = instance.dynamic_events
             self.assertTrue(events["resample_each_reset"])
             self.assertNotIn("events", events)
 
         for split in ("validation", "test"):
-            instances = load_instances(f"data/dataset_dynamic/{split}")
+            instances = load_instances(f"data/dataset_test/dynamic/{split}")
             seeds = set()
             scenarios: dict[str, int] = {}
             for instance in instances:
@@ -62,7 +62,7 @@ class DynamicDatasetTests(unittest.TestCase):
             )
 
     def test_trace_materialization_is_random_for_train_and_fixed_for_eval(self) -> None:
-        train = load_instances("data/dataset_dynamic/train")[0]
+        train = load_instances("data/dataset_test/dynamic/train")[0]
         first = materialize_dynamic_events(train, seed=7)
         repeated = materialize_dynamic_events(train, seed=7)
         self.assertEqual(first, repeated)
@@ -72,7 +72,7 @@ class DynamicDatasetTests(unittest.TestCase):
         }
         self.assertGreater(len(traces), 1)
 
-        validation = load_instances("data/dataset_dynamic/validation")[0]
+        validation = load_instances("data/dataset_test/dynamic/validation")[0]
         fixed_a = materialize_dynamic_events(validation, seed=7)
         fixed_b = materialize_dynamic_events(validation, seed=999)
         self.assertEqual(fixed_a, fixed_b)

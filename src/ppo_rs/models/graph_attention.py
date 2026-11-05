@@ -79,21 +79,27 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
         edge_index: torch.Tensor,
         edge_types: torch.Tensor,
         edge_features: torch.Tensor,
+        relation_indices: dict[int, torch.Tensor] | None = None,
     ) -> torch.Tensor:
         sources, destinations = edge_index
         node_count = nodes.shape[0]
         queries = self.query(nodes).view(node_count, self.heads, self.head_dim)
         aggregated = torch.zeros_like(nodes)
 
+        if relation_indices is None:
+            relation_indices = {
+                relation: torch.where(edge_types == relation)[0]
+                for relation in range(len(self.keys))
+            }
         for relation, (key_layer, value_layer, bias_layer, edge_value_layer) in enumerate(
             zip(self.keys, self.values, self.edge_biases, self.edge_values)
         ):
-            relation_mask = edge_types == relation
-            if not torch.any(relation_mask):
+            relation_index = relation_indices.get(relation)
+            if relation_index is None or relation_index.numel() == 0:
                 continue
-            relation_sources = sources[relation_mask]
-            relation_destinations = destinations[relation_mask]
-            relation_edges = edge_features[relation_mask]
+            relation_sources = sources.index_select(0, relation_index)
+            relation_destinations = destinations.index_select(0, relation_index)
+            relation_edges = edge_features.index_select(0, relation_index)
             keys = key_layer(nodes[relation_sources]).view(
                 -1, self.heads, self.head_dim
             )

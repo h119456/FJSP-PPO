@@ -7,9 +7,9 @@ from ppo_rs import load_instances
 
 class DatasetTests(unittest.TestCase):
     def test_dataset_split_sizes_and_names(self) -> None:
-        train = load_instances("data/dataset/train")
-        validation = load_instances("data/dataset/validation")
-        test = load_instances("data/dataset/test")
+        train = load_instances("data/dataset_test/static/train")
+        validation = load_instances("data/dataset_test/static/validation")
+        test = load_instances("data/dataset_test/static/test")
 
         self.assertEqual(len(train), 100)
         self.assertEqual(len(validation), 20)
@@ -18,7 +18,7 @@ class DatasetTests(unittest.TestCase):
 
     def test_every_instance_has_all_resource_types(self) -> None:
         for split in ("train", "validation", "test"):
-            for instance in load_instances(f"data/dataset/{split}"):
+            for instance in load_instances(f"data/dataset_test/static/{split}"):
                 self.assertIn("M3", instance.stress_relief.machines)
                 self.assertIn("M4", instance.compensation.machines)
                 self.assertTrue(instance.compensation.allow_original_machine)
@@ -41,7 +41,7 @@ class DatasetTests(unittest.TestCase):
 
     def test_auxiliary_process_time_and_cost_ranges(self) -> None:
         for split in ("train", "validation", "test"):
-            for instance in load_instances(f"data/dataset/{split}"):
+            for instance in load_instances(f"data/dataset_test/static/{split}"):
                 shortest_normal = min(
                     duration
                     for job in instance.jobs

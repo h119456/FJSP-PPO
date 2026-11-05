@@ -19,6 +19,9 @@ from scripts.evaluate_dataset import main
         ("mlp", "compact14", "enhanced25", "checkpoint"),
         ("gnn_attention", "enhanced19", "enhanced25", "config"),
         ("mlp", "compact14", "compact21", "legacy"),
+        ("mlp", "compact18", "compact21", "checkpoint"),
+        ("gnn_attention", "compact18", "compact21", "checkpoint"),
+        ("gnn_attention", "unified23", "enhanced25", "checkpoint"),
     ],
 )
 def test_dataset_cli_evaluates_checkpoint_input_profiles(
@@ -99,3 +102,13 @@ def test_dataset_cli_evaluates_checkpoint_input_profiles(
     assert metadata["parameter_count"] == sum(p.numel() for p in model.parameters())
     assert result["aggregates"]["candidate"]["valid_instance_count"] == 1
     assert result["aggregates"]["candidate"]["total_schedule_violations"] == 0
+    # The CLI must persist timings for both learned policies and rule baselines.
+    for name, aggregate in result["aggregates"].items():
+        metrics = result["instances"][0]["policies"][name]
+        assert aggregate["mean_episode_wall_seconds"] > 0
+        assert aggregate["total_episode_wall_seconds"] == metrics["episode_wall_seconds"]
+        for key in ("policy_inference_seconds", "graph_construction_seconds"):
+            assert aggregate[f"mean_{key}"] == metrics[key]
+            assert 0 <= metrics[key] <= metrics["episode_wall_seconds"]
+        if name != "candidate" or model_type == "mlp":
+            assert metrics["graph_construction_seconds"] == 0
