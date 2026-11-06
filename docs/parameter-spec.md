@@ -840,3 +840,285 @@ None
 ## Validation Notes
 
 166项完整测试、真实dataset2两组预检及四个组／模型的CPU静态到动态训练通过；未执行新的正式GPU实验。
+
+---
+
+Doc-ID: PARAM-2026-11-05-009
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 启动dataset1零额外成本、完整state、静态MLP/GNN训练并核对上次参数
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 两组从头训练，使用dataset1_cost0/static，各20,000回合，依次各占用8张GPU。
+- 核心PPO参数与上次dataset2有成本实验一致；局部输入由21改为完整25维，全局仍23维。
+- 全部1300实例逐字段核对，仅去应力／补偿成本归零，时间占用不变。
+
+## Assumptions
+
+- 用户“去盈利”按上下文解释为“去应力”；成本为0不取消操作或设备占用。
+- 不加载上次23/21权重，使用本次23/25结构从头训练。
+
+## Open Questions
+
+None
+
+## Context
+
+正式输出为`outputs/fullstate_jingtai_set1/MLP`与`GNN`；GPU0～7；先MLP后GNN。
+
+## Parameter Table
+
+| 参数 | 类型 | 本次值 | 单位／约束 |
+| --- | --- | --- | --- |
+| episodes | int | 20000 | 全局回合，正整数 |
+| seed / eval_seed | int | 7 / 1007 | 与上次相同 |
+| mini_batch_size | int | 64 | 全局步数，须整除world size |
+| distributed_world_size | int | 8 | 每组8个进程，单rank batch8 |
+| episodes_per_update / ppo_epochs | int | 10 / 4 | 全局回合／更新轮数 |
+| learning_rate / final_learning_rate | float | 3e-4 / 5e-5 | 正数，线性下降 |
+| entropy_coef / final_entropy_coef | float | 0.02 / 0.005 | 非负，线性下降 |
+| gamma / gae_lambda | float | 1.0 / 0.95 | [0,1] |
+| clip_ratio / value_coef / max_grad_norm | float | 0.2 / 0.5 / 0.5 | 与上次相同 |
+| hidden_dim | int | 128 | GNN须整除attention_heads |
+| gnn_layers / attention_heads | int | 2 / 4 | 仅GNN |
+| validation_interval | int | 500 | 全局回合，为更新回合数倍数 |
+| latest_checkpoint_interval / checkpoint_interval | int | 100 / 5000 | 全局回合 |
+| observation_profile / action_feature_profile | str | unified23 / enhanced25 | 全局23／局部25；GNN节点13 |
+| output_dir_mode | str | existing | 已预检新空模型目录，精确输出路径 |
+| train / validation / test | int | 1000 / 100 / 200 | 静态配对cost0实例 |
+
+## Constraint Rules
+
+- 两组除架构与输出路径外无配置差异，所有核心PPO超参数与上次相同。
+- 当前8卡依次运行，不同时启动两组争用GPU；正式预算保持20k，未添加自动早停。
+- 正常完成时目标等于makespan；去应力及补偿仍有持续时间与设备竞争。
+- 测试集参与数据分离检查，不参与训练或best选择；本轮不自动生成最终测试报告。
+
+## Preset Profiles
+
+- 检查：使用本次输出目录内`preflight.json`、`parameter_comparison.json`及`data_audit.json`核对，不启动训练。
+- 本次正式：上述固定20k、8卡、完整23/25配置；不启用其他预算预设以免偏离用户指定对照条件。
+
+## Validation Notes
+
+实际两组预检通过，参数差异为空，原始有成本与cost0的1300实例逐字段比较通过；针对静态／动态训练、分布式验证、cost0的19项回归通过（9.21秒）。
+
+---
+
+Doc-ID: PARAM-2026-11-05-010
+Doc-Type: params
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 在dataset1完整state零费用静态最佳权重基础上检查参数并启动动态训练
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 两模型分别从对应静态best初始化，各微调10,000回合，Adam、计数和学习率日程重新开始。
+- 输入和物理条件保持完整23／25、cost0；动态训练事件每次reset采样，验证／测试事件固定。
+- GPU0～7依次运行MLP、GNN，输出为outputs/fullstate_dongtai_set1下的MLP与GNN。
+
+## Assumptions
+
+- “在此基础上”沿用dataset1_cost0、seed7、完整输入和各模型静态best；早停后的GNN使用第9500回合best，不使用latest。
+- 本次按已有动态模板预算执行，不将上一次临时早停决定转成自动早停规则。
+
+## Open Questions
+
+None
+
+## Context
+
+MLP静态来源为fullstate_jingtai_set1/MLP/checkpoints/best.pt，第20,000回合，验证目标36.0909。GNN来源为同静态目录GNN/checkpoints/best.pt，第9,500回合，验证目标34.1139。精确来源、SHA256与来源配置保存在本次initialization_sources.json。
+
+## Parameter Table
+
+| 参数 | 类型 | 本次值 | 范围／单位／依赖 |
+| --- | --- | --- | --- |
+| train／validation／test | 路径 | data/dataset1_cost0/dynamic下对应split | 1000／100／200，保持分离 |
+| episodes | int | 10000 | 正整数，全局回合，静态原预算20000 |
+| seed／eval_seed | int | 7／1007 | 训练随机过程／固定验证种子 |
+| learning_rate／final_learning_rate | float | 1e-4／2e-5 | 正数，线性下降，静态为3e-4／5e-5 |
+| entropy_coef／final_entropy_coef | float | 0.01／0.003 | 非负，线性下降，静态为0.02／0.005 |
+| gamma／gae_lambda | float | 1.0／0.95 | [0,1] |
+| mini_batch_size | int | 64 | 全局样本数，可被8整除 |
+| distributed_world_size | int | 8 | GPU进程数，各rank batch8 |
+| episodes_per_update／ppo_epochs | int | 10／4 | 全局回合／每块优化轮数 |
+| clip_ratio／value_coef／max_grad_norm | float | 0.2／0.5／0.5 | clip在(0,1)，value非负，梯度界正数 |
+| observation_profile／action_feature_profile | str | unified23／enhanced25 | 与静态来源相同；全局23、动作25 |
+| hidden_dim | int | 128 | GNN须整除attention_heads |
+| gnn_layers／attention_heads | int | 2／4 | 仅GNN，节点13、边2维 |
+| validation_interval | int | 500 | 全局回合，为10的倍数 |
+| latest_checkpoint_interval／checkpoint_interval | int | 100／5000 | 全局回合，为10的倍数 |
+| initialize_from | 路径 | 各自静态best.pt | 只加载权重，不恢复优化器和旧历史 |
+| output_dir_mode | str | existing | 精确新建模型目录；监督程序拒绝已有产物 |
+| enable_plots | bool | false | 训练与验证原始曲线数据持续保存 |
+
+## Constraint Rules
+
+- 同阶段两模型非架构优化参数差异为空；来源checkpoint与配置在每模型启动前校验SHA256。
+- 环境语义版本7、动态输入版本2；静态与动态全局23／动作25／GNN节点13完全兼容。
+- 静态预训练实际预算不同：MLP训练20k、GNN早停保存历史13270，所选权重分别来自20k／9500；动态同预算不代表整个训练链等计算投入。
+- 两种辅助费用为0，时长和设备占用保持；等待成本为0，当前目标为makespan。
+- 事件比例无事件65%、插单20%、故障10%、混合5%；未来事件和未释放工件对策略隐藏。
+- 测试集只做配置与数据完整性检查，不参与微调或best选择；后续测试评估须另行执行。
+
+## Preset Profiles
+
+- 预检：preflight.json、data_audit.json和initialization_smoke.json；CPU核查，不更新静态权重。
+- 本次微调：固定上述10k、8卡和低学习率／熵系数，依次两模型；无需额外预算预设。
+
+## Validation Notes
+
+两模型严格加载静态best及配对参数预检通过；cost0源逐字段检查和动态数据校验通过。两模型各运行四种固定验证场景，共8回合正常完成、零违规、额外成本0。定向pytest 19项通过，9.69秒。未改变通用算法、网络或输入模板。
+
+
+---
+
+Doc-ID: PARAM-2026-11-06-001
+Doc-Type: params
+Owner: Codex
+Date: 2026-11-06
+Version: v1.0
+Status: final
+Source: dataset2和dataset3完整state静态到动态训练，分别固定GPU0–3和4–7
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 两数据集并行、每数据集各模型依次运行，静态20k与动态10k回合保持原预算。
+- 使用dataset2_cost0与dataset3_cost0，完整全局23／局部25，seed7。
+- 四卡保持全局batch64，每rank batch16；动态来源仅为各自数据集和模型的静态best。
+
+## Assumptions
+
+- 用户新的分卡要求适用于静态及后续动态阶段。
+- 延续零额外费用与原物理时长、原固定划分、验证总体均值选best，无自动早停。
+
+## Open Questions
+
+None
+
+## Context
+
+两个数据集各有静态／动态阶段与MLP／GNN配置，共8个模型任务。dataset2使用outputs/fullstate_jingtai_set2及fullstate_dongtai_set2；dataset3使用对应set3目录。数据路径为data/dataset{2,3}_cost0/{static,dynamic}/{train,validation,test}。
+
+## Parameter Table
+
+| 参数 | 类型 | 静态值 | 动态值 | 范围／单位／依赖 |
+| --- | --- | --- | --- | --- |
+| CUDA_VISIBLE_DEVICES | str | dataset2:0,1,2,3；dataset3:4,5,6,7 | 同静态 | 两组物理GPU不重叠 |
+| distributed_world_size | int | 4 | 4 | 正整数，与torchrun及可见GPU一致 |
+| episodes | int | 20000 | 10000 | 全局回合 |
+| seed／eval_seed | int | 7／1007 | 7／1007 | 训练／验证随机源 |
+| mini_batch_size | int | 64 | 64 | 全局样本数，可被4整除；每卡16 |
+| episodes_per_update／ppo_epochs | int | 10／4 | 10／4 | 全局回合／每块优化轮数 |
+| learning_rate→final_learning_rate | float | 3e-4→5e-5 | 1e-4→2e-5 | 正数，线性下降 |
+| entropy_coef→final_entropy_coef | float | 0.02→0.005 | 0.01→0.003 | 非负，线性下降 |
+| gamma／gae_lambda | float | 1.0／0.95 | 同静态 | [0,1] |
+| clip_ratio／value_coef／max_grad_norm | float | 0.2／0.5／0.5 | 同静态 | clip在(0,1)，value非负，梯度界正数 |
+| observation_profile／action_feature_profile | str | unified23／enhanced25 | 同静态 | 全局19+4动态预留、局部25 |
+| hidden_dim | int | 128 | 128 | 正整数，可被4头整除 |
+| gnn_layers／attention_heads | int | 2／4 | 2／4 | GNN节点13、边2维 |
+| validation_interval | int | 500 | 500 | 全局回合，为10的倍数 |
+| latest_checkpoint_interval／checkpoint_interval | int | 100／5000 | 同静态 | 全局回合，为10的倍数 |
+| initialize_from | path/null | 无，从头训练 | 对应本数据集静态best.pt | 不使用归档八卡权重，不恢复优化器 |
+| output_dir_mode／enable_plots | str／bool | existing／false | 同静态 | 精确新目录，原始曲线JSON保存 |
+| train／validation／test | path | 各1000／100／200 | 同静态 | 固定划分且内容不交叉 |
+
+## Constraint Rules
+
+- 同阶段两模型仅架构、输出及对应来源不同；四卡配置不改全局batch、学习率或更新回合数。
+- 每数据集两种静态模型均完成且有best／latest／final、完整历史后，才检查与启动动态阶段。
+- 代码和配置哈希固定，动态来源严格匹配相同数据集、相同模型、相同state与网络结构；Adam和历史重置。
+- 环境语义7、动态输入语义2；未来事件与未释放工件隐藏。
+- 无事件／插单／故障／混合训练概率65%／20%／10%／5%；验证为65／20／10／5，测试为130／40／20／10。
+- 两种辅助额外费用0，处理时长和设备占用不变；测试集不用于训练或best选择。
+
+## Preset Profiles
+
+- CPU预检：全数据来源、划分与参数检查，不更新模型。
+- 本次四卡：dataset2绑定0–3、dataset3绑定4–7，独立监督链并行，为本次固定执行档。
+- 先前八卡：仅归档溯源，已停止，不作为本次执行档。
+
+## Validation Notes
+
+两个数据集与各阶段参数审核通过；19项既有定向测试及GPU绑定／接续／失败隔离模拟检查通过。实际4进程训练与模型进度由运行目录记录，静态best生成后的严格迁移预检将自动执行。
+
+
+---
+
+Doc-ID: PARAM-2026-11-06-002
+Doc-Type: params
+Owner: Codex
+Date: 2026-11-06
+Version: v1.0
+Status: final
+Source: 简化state dataset1使用0–1卡、dataset2使用2–4卡、dataset3使用5–7卡的静态后动态训练准备
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 简化state实际全局18维（14基础＋4动态预留）、动作21维，MLP／GNN对应参数90370／1001122。
+- 各数据集静态20k后动态10k，seed7；动态来源严格为本次对应简化静态best。
+- 保持全局batch64，2进程有效32／32；3进程有效22／22／20、补齐2槽位且零loss权重。
+
+## Assumptions
+
+- 延续cost0、原数据划分、base模板超参、原验证选择规则；本次仅准备，未启动训练。
+- 命名simplestate_jingtai_setN及simplestate_dongtai_setN，与fullstate结果分离。
+
+## Open Questions
+
+None
+
+## Context
+
+入口scripts/train_simplestate_pipeline.py以base模板派生12份任务配置，启动时保存到目标模型目录，不预写动态权重文件。三个数据集并行，每数据集四项任务顺序执行。
+
+## Parameter Table
+
+| 参数 | 类型 | 静态 | 动态 | 范围／单位／依赖 |
+| --- | --- | --- | --- | --- |
+| CUDA_VISIBLE_DEVICES | str | set1:0,1；set2:2,3,4；set3:5,6,7 | 相同 | 物理GPU不重叠 |
+| distributed_world_size | int | 2／3／3 | 相同 | 与GPU数量及torchrun一致 |
+| mini_batch_size | int | 64 | 64 | 正整数，全局有效样本数，支持非整除 |
+| 每rank槽位 | 推导int | set1:32；set2/3:22 | 相同 | ceil(batch/world_size)，补齐不参与loss |
+| observation_profile／action_feature_profile | str | compact18／compact21 | 相同 | 基础14＋动态4，动作21 |
+| hidden_dim／gnn_layers／attention_heads | int | 128／2／4 | 相同 | hidden可被heads整除，GNN图13／2维 |
+| episodes | int | 20000 | 10000 | 全局回合 |
+| seed／eval_seed | int | 7／1007 | 相同 | 可用--seed改变训练seed，验证种子固定 |
+| learning_rate→final_learning_rate | float | 3e-4→5e-5 | 1e-4→2e-5 | 正数，线性衰减 |
+| entropy_coef→final_entropy_coef | float | .02→.005 | .01→.003 | 非负，线性衰减 |
+| gamma／gae_lambda | float | 1／.95 | 相同 | [0,1] |
+| clip_ratio／value_coef／max_grad_norm | float | .2／.5／.5 | 相同 | clip在(0,1)，value非负，梯度界正数 |
+| episodes_per_update／ppo_epochs | int | 10／4 | 相同 | 全局回合／每块优化轮数 |
+| validation／latest／snapshot间隔 | int | 500／100／5000 | 相同 | 回合数，10的倍数 |
+| initialize_from | path/null | 无 | 对应静态best.pt | 只迁移权重，Adam与计数重置 |
+| output_dir_mode／enable_plots | str／bool | existing／false | 相同 | 新建精确目录，曲线原始JSON保留 |
+| train／validation／test | path | datasetN_cost0/static:1000／100／200 | dynamic:1000／100／200 | 内容分离，测试不选best |
+
+## Constraint Rules
+
+- 三卡不把batch改为63或66，PPO现有屏蔽和DDP缩放确保loss按有效64样本均值更新；尾批同理。
+- 新入口兼容非整除batch；原公共checker仍保留整除约束，不影响正在运行的完整state监督链。
+- 两种静态模型完整完成后，严格校验动态来源模型／schema／来源train路径／seed与SHA256，随后逐模型动态微调。
+- 未来事件和未释放工件隐藏；静态预留字段0，动态填可观测事件；GNN图通道在两state组保持相同。
+- 新训练真实启动前要求既有fullstate set2与set3均complete；不覆盖已有简化输出，文件锁防止同数据集重复运行。
+
+## Preset Profiles
+
+- CPU预检：--check，可在当前训练期间运行，不更新模型，不创建模型输出目录。
+- 三数据集并行：--dataset all，固定2／3／3进程和原batch64。
+- 单数据集：--dataset 1/2/3，保持同样分卡和四任务顺序，适合单独终端管理。
+
+## Validation Notes
+
+三个数据集全数据审核、输入／配对预检均通过；21项组合测试通过，随后新增的总启动扇出检查也通过。三进程MLP与GNN全局batch64梯度和单进程一致性在浮点容差内通过。手动命令见docs/simplestate-training.md。

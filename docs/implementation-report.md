@@ -978,3 +978,239 @@ None
 ## Follow-ups
 
 用户可使用--check核对后按文档启动新组；本轮未自动启动。
+
+---
+
+Doc-ID: IMPL-2026-11-05-008
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 启动dataset1零额外成本、完整state、静态MLP/GNN训练
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 创建指定的`outputs/fullstate_jingtai_set1/MLP`与`GNN`，保存独立配置、日志、历史和checkpoint。
+- 核心PPO参数与上一组一致；本次完整state为23/25，上次为23/21；数据改为dataset1_cost0/static。
+- 8卡按MLP、GNN顺序运行，MLP已开始采样更新，GNN排队自动接续。
+
+## Assumptions
+
+- 去应力与补偿只取消额外成本，仍保留时长；两组均从头训练。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+核对旧快照、完整组模板及零成本数据，精确分配新输出目录，通过定向检查后后台启动监督脚本。
+
+## Changes (by file/module)
+
+- 输出目录内`MLP/training_config.json`与`GNN/training_config.json`：从完整静态模板派生，不改通用训练算法及原模板。
+- `preflight.json`、`parameter_comparison.json`、`data_audit.json`：配对配置、上次参数及全部实例成本／时长检查。
+- `run_training.py`、`status.json`、`launch_metadata.json`、`supervisor.log`：依次8卡训练，拒绝已有训练产物，进程退出检查和信号停止，逐组保留日志。
+- 记录Git提交和训练源码SHA256，避免后续代码变化混淆实际运行版本。
+- `docs/parameter-spec.md`：PARAM-2026-11-05-009记录本轮精确参数和差异。
+
+## Tests Run
+
+- 实际两组CPU预检通过，非架构配置差异为空，全局23／局部25，GNN节点13。
+- 1300个cost0静态实例与有成本源逐字段核对通过，1000／100／200，无动态事件，仅两个成本字段改变。
+- 定向pytest：state_training、parallel_validation、distributed_training、zero_cost_dataset共19项通过，9.21秒。
+- 监督脚本语法检查及模型目录检查通过；正式8rank MLP已写出训练历史、正常完成标志及完整计时字段。
+
+## Risks and Rollback Notes
+
+- 本次改变数据规模、辅助成本和局部输入，不能把与上次的解质量差异单独归因于某一项。
+- 使用加速后的代码，训练速度不沿用上次未优化版本的耗时结论；GPU端到端加速比尚无单独基准。
+- 指定模型目录直接保存checkpoint，训练期间不要重命名输出目录。
+- 输出均受.gitignore忽略，不自动暂存、提交或推送本轮文档改动。
+
+## Follow-ups
+
+MLP完成后自动运行GNN；后续可按需在固定200测试实例上评估最佳模型。
+
+---
+
+Doc-ID: IMPL-2026-11-05-009
+Doc-Type: implementation
+Owner: user
+Date: 2026-11-05
+Version: v1.0
+Status: final
+Source: 核查参数并在fullstate_dongtai_set1启动dataset1完整state MLP/GNN动态微调
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 本次输出目录为outputs/fullstate_dongtai_set1，MLP与GNN分别保留配置、日志、历史与checkpoint。
+- 由对应静态best初始化，保持cost0与完整23／25输入；各动态微调10,000回合，低学习率和熵系数使用现有动态模板。
+- 8卡后台监督进程依次运行MLP与GNN，模型启动前检查配置和来源checkpoint哈希。
+
+## Assumptions
+
+- 用户已授权参数检查后启动两组训练，沿用静态阶段GPU0～7及MLP→GNN顺序。
+- 不添加Dropout、不重新划分数据、不继承静态Adam和历史，不自动复用上次人工早停规则。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+核对动态模板及静态来源，验证cost0／动态数据和权重运行兼容性，创建精确新目录，完成定向测试后启动持久监督程序。
+
+## Changes (by file/module)
+
+- 本次目录的MLP/training_config.json与GNN/training_config.json：从完整动态模板派生，绑定对应静态best，更新数据和输出绝对路径。
+- preflight.json、data_audit.json、parameter_comparison.json：记录配对优化参数、数据校验及静动态差异。
+- initialization_sources.json、initialization_smoke.json：来源权重／配置／SHA256，以及两模型四场景推理检查。
+- run_training.py：复用静态顺序监督实现，增加启动前配置与来源权重哈希验证；保留状态、退出检查和信号停止逻辑。
+- status.json、launch_metadata.json、supervisor.log：保存状态与监督进程信息，启动时间为北京时间2026-11-05 18:13:56。
+- docs/parameter-spec.md：追加PARAM-2026-11-05-010；本报告只追加新条目，保留既有文档改动。
+
+## Tests Run
+
+- 真实配置两模型CPU预检通过：非架构优化设置无差异、严格加载静态best，全局23／动作25，GNN节点13。
+- dataset1静态与动态cost0逐字段来源检查通过；动态1300实例的配对、数据分离、隐藏未来信息、事件采样与固定轨迹校验通过。
+- 实际静态MLP／GNN各运行无事件、插单、故障、混合验证场景，共8个完整回合，零违规、额外成本0。
+- pytest：test_state_training、test_parallel_validation、test_distributed_training、test_zero_cost_dataset，共19项通过，9.69秒。
+- 监督脚本AST语法检查、新目录防覆盖、8GPU空闲及127GB磁盘余量检查通过。
+
+## Risks and Rollback Notes
+
+- 本次两模型静态来源的训练回合预算不同，结果应报告完整预训练来源；不能只凭动态预算相同声称全链路等预算。
+- 动态集合65%无事件，最终应同时按场景报告，避免仅看总体均值。
+- 新目录产物受.gitignore忽略，未改通用训练代码或静态产物；无自动提交／推送。
+- 需要停止时向本次监督进程发送SIGTERM，保留已保存best和latest；不要对同目录重复启动。
+
+## Follow-ups
+
+MLP完成后自动接续GNN；训练过程中检查验证趋势，最终在固定测试集进行各场景评估。原始training_history与validation_history持续保存，可后续绘制曲线。
+
+
+---
+
+Doc-ID: IMPL-2026-11-06-001
+Doc-Type: implementation
+Owner: Codex
+Date: 2026-11-06
+Version: v1.0
+Status: final
+Source: dataset2使用0–3卡、dataset3使用4–7卡，并行执行完整state静态MLP/GNN及后续动态训练
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- dataset1动态MLP与GNN均已完成10,000回合，最佳验证目标分别36.60831与34.1991009133。
+- dataset2与dataset3分别绑定物理GPU0–3和4–7，两条独立监督链并行，每条链按静态MLP、静态GNN、动态MLP、动态GNN顺序运行。
+- 静态各20,000回合从头训练，动态各10,000回合从本数据集对应静态best仅迁移权重；保持完整23／25输入、cost0、seed7与全局batch64。
+
+## Assumptions
+
+- 沿用前序实验的去应力与补偿额外费用0、物理时间不变；不调整网络、PPO算法或best选择指标。
+- 新的分卡要求替代刚启动的dataset2八卡运行；停止后归档旧产物，四卡运行重新开始。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+核实并停止旧八卡监督链，归档产物，校验两个数据集和四卡配置，检查自动接续与故障隔离，启动两个持久后台进程并验证GPU绑定与训练日志。
+
+## Changes (by file/module)
+
+- outputs/fullstate_jingtai_set2与outputs/fullstate_dongtai_set2：精确保存dataset2静／动态结果，每目录含MLP与GNN；新GPU绑定为0–3。
+- outputs/fullstate_jingtai_set3与outputs/fullstate_dongtai_set3：同结构保存dataset3静／动态结果，GPU绑定为4–7。
+- 两个静态目录的run_training.py：独立文件锁、四卡环境与world_size一致性检查、阶段及模型状态、配置与代码哈希、错误停止后续任务、信号转发和完成检查。
+- 动态阶段等待本链两种静态模型完成后严格校验对应best权重；自动记录initialization_sources.json，重新初始化Adam和日程。
+- 各目录保存data_audit.json、配置、预检及launch_metadata.json；动态来源预检在静态完成后执行，当前记录为preflight_pending_sources.json。
+- 两个静态目录的pipeline_status.json记录各自四项任务；supervisor.log记录启动和切换，模型training.log与原始训练／验证历史持续保存。
+- 旧dataset2八卡目录归档为fullstate_jingtai_set2_archived_8gpu_20261106_101537及fullstate_dongtai_set2_archived_8gpu_20261106_101537，不用于新模型初始化。
+- 本报告与docs/parameter-spec.md只追加条目，保留现有工作区修改；训练算法和模板没有改动。
+
+## Tests Run
+
+- 两数据集static／dynamic共5200个实例的cost0来源逐字段校验通过，物理时长与事件保持，划分各1000／100／200。
+- 动态数据的静态配对、隐藏未来信息、随机训练事件、固定验证测试轨迹、场景比例校验通过。
+- 两数据集各阶段MLP／GNN优化设置配对检查通过，参数量92162／1002274，world_size4、每卡batch16。
+- 19项定向pytest通过，9.61秒：state_training、parallel_validation、distributed_training、zero_cost_dataset；之后仅调整运行监督脚本及配置，未更改训练代码。
+- 四卡监督脚本模拟完整接续两种GPU分配均通过；检查torchrun四进程、CUDA_VISIBLE_DEVICES、静态到动态来源、顺序与完成状态；模拟训练失败后后续任务不启动通过。
+- 旧八卡进程已退出且GPU释放；新监督脚本语法检查通过。实际训练启动和进度另见各training.log与pipeline_status.json。
+
+## Risks and Rollback Notes
+
+- 四卡与此前八卡的rank划分改变，固定seed仍不保证与八卡逐步权重相同；本轮dataset2／3统一使用四卡与相同全局参数。
+- 两链共用CPU和磁盘，吞吐可能受环境模拟影响；训练时长应以实际进展估算。
+- 动态验证65%无事件，事件处理效果仍需分场景报告；当前保持既有总体目标选best的协议。
+- 每条链独立失败停止；停止时核实命令行后向对应supervisor发送SIGTERM，保留已保存checkpoint。不得在同目录重复启动。
+
+## Follow-ups
+
+观察两条链的训练日志与验证历史；静态完成后由监督程序自动检查并接续动态阶段，无需再次手动启动。
+
+
+---
+
+Doc-ID: IMPL-2026-11-06-002
+Doc-Type: implementation
+Owner: Codex
+Date: 2026-11-06
+Version: v1.0
+Status: final
+Source: 为dataset1/2/3准备简化state静态后动态的MLP/GNN代码和手动命令，GPU分别0–1、2–4、5–7
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 新增可手动启动三个并行数据集训练链的入口；每条链静态MLP→静态GNN→动态MLP→动态GNN。
+- 使用compact18／compact21、cost0和原预算，输出按simplestate_jingtai_set1/2/3与simplestate_dongtai_set1/2/3命名。
+- 三卡仍保持全局batch64，使用现有PPO补齐屏蔽；未修改正在运行的完整state代码或公共checker。
+
+## Assumptions
+
+- 用户本次要求准备代码和命令；不立即运行或自动排队简化训练。
+- “命名同上”解释为保留状态组、静动态、set序号及MLP/GNN/checkpoints层级，用simplestate区分fullstate避免覆盖。
+- 简化全局14项加4个动态预留字段，实际网络18维，动作21维，GNN图输入保持原13／2维。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+复用base模板与数据校验，增加手动前台监督入口和三卡参数预检，编写梯度与链路测试，提供CPU检查、前台／后台及单数据集命令。
+
+## Changes (by file/module)
+
+- scripts/train_simplestate_pipeline.py：动态生成并保存配置；固定GPU映射、独立数据集锁、防覆盖、完整state完成检查、状态保存、日志、信号转发、阶段完成检查与对应best权重严格迁移。
+- 新入口支持--dataset all/1/2/3、--check、--output-root和--seed；all同时启动三条链。CPU check不创建输出目录，也不要求GPU。
+- 新入口独立处理已有checker的整除限制，约束检查用可整除大小核对其它参数，实际模型、数据、训练配置与batch64保持不变；报告每rank真实有效样本与补齐槽位。
+- tests/test_simplestate_pipeline.py：配置映射、三卡参数、待生成来源、真实checkpoint迁移审核、完整四任务顺序、失败隔离、防覆盖、check只读与总入口扇出。
+- tests/test_distributed_ppo.py：扩展MLP和GNN到3个CPU进程、全局batch64及67样本，与单进程比较权重和损失，保留原2进程覆盖。
+- docs/simplestate-training.md：操作说明、全部／分别启动命令、后台运行、输出和checkpoint示例、停止与恢复范围。
+- docs/parameter-spec.md追加本次参数记录；保留已有文档修改。
+
+## Tests Run
+
+- 3个数据集共7800个静态／动态cost0实例逐字段来源检查及动态事件／配对／划分审核通过；预检JSON位于/tmp/simplestate_preflight_20261106.json。
+- 预检模型输入18／21、GNN13／2，参数量MLP90370、GNN1001122，12个任务配置来源无误；动态best校验明确延迟至静态完成。
+- 21项组合测试通过，16.08秒：新pipeline首8项、distributed_ppo四项、state_launcher五项、state_training四项；追加总入口测试后新pipeline独立9项全部通过，1.52秒。
+- 三进程MLP/GNN的完整64样本非整除batch与尾批梯度等价测试通过；补齐样本不计入loss。
+- --help与git diff --check通过；本次没有启动正式简化state训练，outputs无simplestate模型目录。
+
+## Risks and Rollback Notes
+
+- 启动时若当前fullstate两条链未complete会明确退出，不自动等待；已有目标目录则拒绝覆盖。本入口不自动恢复中断任务。
+- 三数据集使用不同rank数，seed一致不保证同一浮点轨迹，需报告GPU与实际环境步数。
+- 运行日志和曲线JSON持续保存，动态best仍按既有总体均值选择；事件处理研究应另行报告各场景结果。
+- 公共训练代码、base模板和check_comparison.py保持不变，因此不触发当前fullstate监督程序哈希校验失败。
+
+## Follow-ups
+
+当前完整state训练完成后，用户按docs/simplestate-training.md手动执行--dataset all，或在三个终端分别启动--dataset 1/2/3。
