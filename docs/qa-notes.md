@@ -789,6 +789,78 @@ MLP于北京时间2026-11-05 18:30:50完成本轮动态微调，累计10,000回�
 ## References
 
 - `outputs/fullstate_dongtai_set1/status.json`。
+
+---
+
+Doc-ID: QA-2026-11-09-001
+Doc-Type: qa
+Owner: user
+Date: 2026-11-09
+Version: v1.0
+Status: final
+Source: 为什么K不需要偏置；FiLM是否学习参数与K、V逐项相乘
+Activated-Skills: qa-basic
+
+## Summary
+
+- 当前按关系类型和目标节点分组的点积注意力中，静态类型K偏置产生组内常数，softmax会消去它。
+- FiLM学习每类关系的逐维缩放向量，以及V的平移向量；不是额外的稠密矩阵乘法。
+- 共享K/V投影矩阵和FiLM参数均通过PPO反向传播更新。
+
+## Assumptions
+
+- 讨论尚未实现的共享K/V＋类型FiLM方案，沿用当前关系内softmax，K调制后不再经过非线性或归一化。
+
+## Open Questions
+
+- None
+
+## Question
+
+为什么K不需要偏置？是否学习矩阵与K、V逐项相乘？
+
+## Answer
+
+设同一目标节点$i$、同一关系$r$的邻居为$j$。如果$\widetilde{k}_{j,r}=\gamma^K_r\odot W_Kh_j+\beta^K_r$，则注意力分数增加$q_i^T\beta^K_r/\sqrt{d}$。该项对组内所有$j$相同，因此被softmax抵消；省略的是此处静态类型K偏置，不是所有注意力架构的K偏置。若跨关系统一softmax，或K调制后增加非线性、归一化，则结论需重新判断。
+
+每层学习共享$W_K,W_V$和按关系索引的$\gamma^K,\gamma^V,\beta^V$表。每张表为$10\times128$，每条边取出对应关系的128维向量，与投影后的K/V逐项相乘，V再逐项加偏置：$\widetilde{k}=\gamma^K_r\odot W_Kh_j$，$\widetilde{v}=\gamma^V_r\odot W_Vh_j+\beta^V_r$。初始化缩放为1、偏置为0，训练通过PPO梯度共同更新；FiLM仍是待实现方案。
+
+---
+
+Doc-ID: QA-2026-11-09-002
+Doc-Type: qa
+Owner: Codex
+Date: 2026-11-09
+Version: v1.0
+Status: final
+Source: 原不共享KV代码是否保留；Q为什么共享；FiLM参数量变化
+Activated-Skills: qa-basic
+
+## Summary
+
+- 原关系独立K/V分支保留，shared_kv_film默认false，新结构为显式开启的可选分支。
+- 原版每层Query已跨关系共享；关系K仍使同一Query对不同类型消息产生不同匹配。
+- 完整state无物理门控模型参数从1002274降至420130，减少582144，约58.1%。
+
+## Assumptions
+
+- hidden128，两层四头，十种有向关系，完整state；不包含物理门控。
+
+## Open Questions
+
+- None
+
+## Question
+
+原有不共享KV代码保留了吗；为什么Q可以共享；使用FiLM后参数量如何变化？
+
+## Answer
+
+关闭shared_kv_film时，每层保留十套独立keys和values；开启时使用各一套共享K/V和三张类型表。原默认参数名、初始化顺序及checkpoint schema保持兼容。
+
+Q表达目标节点当前的信息需求，K表达邻居提供的信息；同一目标节点可用共同的查询空间，通过类型化K学习不同关系的匹配方式。原版K使用各关系独立矩阵，新版K使用共享投影加类型缩放；因此Q共享不等于所有关系的注意力相同。每层的Q仍独立，跨关系共享属于架构取舍，不保证与任意关系独立Q同等表达能力。
+
+两层原K/V共655360参数，新共享K/V共65536，类型FiLM表共7680；其余346914不变，合计1002274→420130。收益来自共享矩阵后用轻量类型参数表达差异，而不是额外添加FiLM本身减少参数。
 - `outputs/fullstate_dongtai_set1/MLP/validation_history.json`、`best_evaluation.json`、`checkpoint_summary.json`。
 - `outputs/fullstate_dongtai_set1/MLP/training_history.json`。
 

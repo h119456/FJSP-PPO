@@ -1279,3 +1279,65 @@ None
 ## Follow-ups
 
 按docs/physical-gating.md查看完整框图与门控导出接口。正式训练需另行选择数据集／state和GPU；先基线与门控对照，不同时引入共享K/V和FiLM。
+
+---
+
+Doc-ID: IMPL-2026-11-09-002
+Doc-Type: implementation
+Owner: Codex
+Date: 2026-11-09
+Version: v1.0
+Status: final
+Source: 在原版代码中加入共享 K/V＋类型 FiLM，先不与物理门控合并
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 新增默认关闭的 shared_kv_film 开关，每层共享两个不同的 K/V 投影，以十种有向关系的三张参数表调制输出。
+- K/V 逐维缩放、V 加偏置；FiLM 作用于节点 Value，随后加原边 Value；不设置会在当前 softmax 中抵消的类型 K 偏置。
+- 完整 state 参数量从 1,002,274 降为 420,130，静态／动态训练与 checkpoint 链路接通；物理门控独立并互斥。
+
+## Assumptions
+
+- 沿用两层四头、隐藏维度128、原关系内目标节点 softmax；两层间不共享投影或 FiLM 表。
+- 本次实现和验证，不启动新的正式训练；保留已在运行的简化 state 实验及其后续阶段配置。
+
+## Open Questions
+
+- None
+
+## Plan Summary
+
+核对原注意力与迁移协议，加入兼容旧结构的可选分支，接入训练／工厂／审查器，新增独立配置及说明，检查公式梯度、PPO、静态动态迁移和多进程一致性。
+
+## Changes (by file/module)
+
+- src/ppo_rs/models/graph_attention.py：新增共享 K/V 线性投影、三张关系参数表；按节点预计算投影一次，再索引并调制；旧关闭路径保留参数名及初始化顺序。
+- src/ppo_rs/models/graph_actor_critic.py：开关、与物理门控互斥校验、两层独立构建、checkpoint schema v1。
+- src/ppo_rs/models/factory.py、src/ppo_rs/train.py：构建／回载与训练参数接线；MLP 启用 FiLM 时明确拒绝。
+- scripts/check_comparison.py：识别 shared_kv_film 架构差异并实际构建新模型审查。
+- configs/shared_kv_film/full_gnn_static.json、full_gnn_dynamic.json：dataset1_cost0 完整 state，静态20k／动态10k、单卡、独立 unique 输出、门控显式关闭。
+- tests/test_shared_kv_film.py：独立逐边参考公式、全部梯度、恒等初始化、节点／边 Value 顺序、类型偏置抵消、schema、概率与 PPO 参数更新、空边及参数量检查。
+- tests/test_distributed_ppo.py：新增 FiLM 两／三进程及缺失关系测试；tests/test_state_training.py：新增简化／完整 state 的 FiLM 静态至含故障动态迁移。
+- docs/shared-kv-film.md：公式、框图、配置、代码位置、手动启动及 checkpoint 边界；parameter-spec 和本报告追加记录。已有 feasibility.md、qa-notes.md 修改保留。
+
+## Tests Run
+
+- 45项通过，17.54秒：shared_kv_film、graph_performance、state_training、comparison、physical_gate。
+- 37项通过，31.90秒：distributed_ppo、simplestate_pipeline、state_ablation_configs、distributed_training、parallel_validation、state_launcher。
+- 合计82项通过，包含 FiLM 两／三进程非整除全局 batch 的梯度与损失等价、缺失关系、旧模型回归、物理门控回归、真实小规模静态／动态训练及 checkpoint 迁移。
+- 新静态配置与匹配 MLP 的 CPU 全数据审查通过；训练／验证／测试1000／100／200，模型参数量420130／92162。
+- outputs/fullstate_jingtai_set1/GNN/checkpoints/best.pt 真实旧 checkpoint 严格回载通过，参数1002274，两开关均关闭。
+- 三条 simplestate 监督状态仍为 training，已生成静态／动态配置的两个扩展开关均关闭；未修改其输出或启动新正式训练。
+- git diff --check 通过。
+
+## Risks and Rollback Notes
+
+- 新结构不支持无损吸收十套任意独立 K/V；旧架构 checkpoint 不能严格迁移到 FiLM 模型。新静态 FiLM checkpoint 可严格迁移到同架构动态训练。
+- 参数减少58.1%不保证相同比例墙钟加速；尚未评估正式训练目标、收敛或速度。
+- 缩放向量可取任意实数，不使用 Sigmoid；独立保留物理门控模型，目前模型入口拒绝两开关同时 true。
+- 原配置默认关闭，不改变正在运行及后续原版实验；停用本变体只需不启用 shared_kv_film。
+
+## Follow-ups
+
+正式静态／动态启动示例见 docs/shared-kv-film.md。动态配置需手动传入本次 FiLM 静态最佳 checkpoint；未提供自动训练串行入口，也未启动正式训练。

@@ -31,6 +31,7 @@ class GraphActorCritic(nn.Module):
         edge_type_count: int,
         gnn_layers: int = 2,
         attention_heads: int = 4,
+        shared_kv_film: bool = False,
         physical_gating: bool = False,
         physical_gate_initial: float = 0.9,
     ) -> None:
@@ -46,8 +47,13 @@ class GraphActorCritic(nn.Module):
         self.edge_type_count = edge_type_count
         self.gnn_layers = gnn_layers
         self.attention_heads = attention_heads
+        if not isinstance(shared_kv_film, bool):
+            raise ValueError("shared_kv_film must be boolean")
         if not isinstance(physical_gating, bool):
             raise ValueError("physical_gating must be boolean")
+        if shared_kv_film and physical_gating:
+            raise ValueError("shared_kv_film and physical_gating are separate experiments; enable only one")
+        self.shared_kv_film = shared_kv_film
         self.physical_gating = physical_gating
         self.physical_gate_initial = physical_gate_initial
         self.node_encoders = nn.ModuleList(
@@ -65,6 +71,7 @@ class GraphActorCritic(nn.Module):
                 edge_feature_dim,
                 edge_type_count,
                 attention_heads,
+                shared_kv_film=shared_kv_film,
             )
             for _ in range(gnn_layers)
         )
@@ -109,7 +116,9 @@ class GraphActorCritic(nn.Module):
             "gnn_layers": self.gnn_layers,
             "attention_heads": self.attention_heads,
         }
-        # Preserve the exact legacy schema and state_dict when the gate is off.
+        # Preserve the exact legacy schema when both extensions are off.
+        if self.shared_kv_film:
+            kwargs.update(shared_kv_film=True, shared_kv_film_schema_version=1)
         if self.physical_gating:
             kwargs.update(physical_gating=True, physical_gate_initial=self.physical_gate_initial,
                           physical_gate_schema_version=1)

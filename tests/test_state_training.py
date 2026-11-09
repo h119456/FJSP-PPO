@@ -15,7 +15,10 @@ from ppo_rs.train import _validate_transfer_schema, train
 
 
 def _small_config(group: str, model: str, phase: str, output: Path) -> dict:
-    config = json.loads(Path(f"configs/state_ablation/{group}_{model}_{phase}.json").read_text())
+    config_model = "gnn" if model == "gnn_film" else model
+    config = json.loads(Path(f"configs/state_ablation/{group}_{config_model}_{phase}.json").read_text())
+    if model == "gnn_film":
+        config.update(shared_kv_film=True, physical_gating=False)
     config.update(
         train_instances="data/examples/synthetic_train.json",
         eval_instances="data/examples/synthetic_test.json",
@@ -28,7 +31,7 @@ def _small_config(group: str, model: str, phase: str, output: Path) -> dict:
 
 
 @pytest.mark.parametrize("group,observation_dim,action_dim", [("base", 18, 21), ("full", 23, 25)])
-@pytest.mark.parametrize("model", ["mlp", "gnn"])
+@pytest.mark.parametrize("model", ["mlp", "gnn", "gnn_film"])
 def test_state_group_static_checkpoint_finetunes_dynamic_without_shape_change(
     tmp_path: Path, group: str, observation_dim: int, action_dim: int, model: str,
 ) -> None:
@@ -42,7 +45,7 @@ def test_state_group_static_checkpoint_finetunes_dynamic_without_shape_change(
     assert checkpoint["observation_dim"] == observation_dim
     assert checkpoint["action_feature_dim"] == action_dim
     assert checkpoint["observation_profile"] == static["observation_profile"]
-    if model == "gnn":
+    if model in {"gnn", "gnn_film"}:
         assert checkpoint["model_kwargs"]["node_feature_dim"] == 13
 
     # Two optimization episodes do not guarantee a competent dispatch policy.

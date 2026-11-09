@@ -9,7 +9,7 @@ from torch import nn
 
 
 class HeterogeneousGraphAttentionLayer(nn.Module):
-    """One multi-head message-passing layer with relation-specific K/V maps."""
+    """Multi-head attention with independent K/V or shared K/V plus type FiLM."""
 
     def __init__(
         self,
@@ -17,22 +17,38 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
         edge_dim: int,
         relation_count: int,
         heads: int,
+        *,
+        shared_kv_film: bool = False,
     ) -> None:
         super().__init__()
+        if not isinstance(shared_kv_film, bool):
+            raise ValueError("shared_kv_film must be boolean")
         if hidden_dim % heads:
             raise ValueError("hidden_dim must be divisible by attention heads")
         self.hidden_dim = hidden_dim
         self.heads = heads
         self.head_dim = hidden_dim // heads
+        self.relation_count = relation_count
+        self.shared_kv_film = shared_kv_film
         self.query = nn.Linear(hidden_dim, hidden_dim, bias=False)
-        self.keys = nn.ModuleList(
-            nn.Linear(hidden_dim, hidden_dim, bias=False)
-            for _ in range(relation_count)
-        )
-        self.values = nn.ModuleList(
-            nn.Linear(hidden_dim, hidden_dim, bias=False)
-            for _ in range(relation_count)
-        )
+        if shared_kv_film:
+            # K and V use different matrices; sharing is across relations only.
+            self.shared_key = nn.Linear(hidden_dim, hidden_dim, bias=False)
+            self.shared_value = nn.Linear(hidden_dim, hidden_dim, bias=False)
+            self.film_key_scale = nn.Parameter(torch.ones(relation_count, hidden_dim))
+            self.film_value_scale = nn.Parameter(torch.ones(relation_count, hidden_dim))
+            self.film_value_bias = nn.Parameter(torch.zeros(relation_count, hidden_dim))
+            # A static relation K bias cancels in relation/destination softmax.
+        else:
+            # Keep the legacy module names and initialization order unchanged.
+            self.keys = nn.ModuleList(
+                nn.Linear(hidden_dim, hidden_dim, bias=False)
+                for _ in range(relation_count)
+            )
+            self.values = nn.ModuleList(
+                nn.Linear(hidden_dim, hidden_dim, bias=False)
+                for _ in range(relation_count)
+            )
         self.edge_biases = nn.ModuleList(
             nn.Linear(edge_dim, heads, bias=False)
             for _ in range(relation_count)
@@ -86,14 +102,18 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
         node_count = nodes.shape[0]
         queries = self.query(nodes).view(node_count, self.heads, self.head_dim)
         aggregated = torch.zeros_like(nodes)
+        if self.shared_kv_film:
+            # Project each node once, rather than re-projecting it per edge/type.
+            shared_keys = self.shared_key(nodes)
+            shared_values = self.shared_value(nodes)
 
         if relation_indices is None:
             relation_indices = {
                 relation: torch.where(edge_types == relation)[0]
-                for relation in range(len(self.keys))
+                for relation in range(self.relation_count)
             }
-        for relation, (key_layer, value_layer, bias_layer, edge_value_layer) in enumerate(
-            zip(self.keys, self.values, self.edge_biases, self.edge_values)
+        for relation, (bias_layer, edge_value_layer) in enumerate(
+            zip(self.edge_biases, self.edge_values)
         ):
             relation_index = relation_indices.get(relation)
             if relation_index is None or relation_index.numel() == 0:
@@ -101,12 +121,22 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
             relation_sources = sources.index_select(0, relation_index)
             relation_destinations = destinations.index_select(0, relation_index)
             relation_edges = edge_features.index_select(0, relation_index)
-            keys = key_layer(nodes[relation_sources]).view(
-                -1, self.heads, self.head_dim
-            )
-            values = value_layer(nodes[relation_sources]).view(
-                -1, self.heads, self.head_dim
-            )
+            if self.shared_kv_film:
+                keys = (
+                    shared_keys[relation_sources] * self.film_key_scale[relation]
+                ).view(-1, self.heads, self.head_dim)
+                values = (
+                    shared_values[relation_sources] * self.film_value_scale[relation]
+                    + self.film_value_bias[relation]
+                ).view(-1, self.heads, self.head_dim)
+            else:
+                keys = self.keys[relation](nodes[relation_sources]).view(
+                    -1, self.heads, self.head_dim
+                )
+                values = self.values[relation](nodes[relation_sources]).view(
+                    -1, self.heads, self.head_dim
+                )
+            # Type FiLM modulates node V only; retain the original edge V path.
             values = values + edge_value_layer(relation_edges).view(
                 -1, self.heads, self.head_dim
             )

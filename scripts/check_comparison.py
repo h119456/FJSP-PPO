@@ -26,7 +26,7 @@ from ppo_rs.train import _validate_transfer_schema  # noqa: E402
 
 
 ARCHITECTURE_KEYS = {"model_type", "gnn_layers", "attention_heads", "output_dir", "initialize_from",
-                     "physical_gating", "physical_gate_initial"}
+                     "physical_gating", "physical_gate_initial", "shared_kv_film"}
 
 
 def _initialization_summary(config: dict[str, Any], model: torch.nn.Module,
@@ -184,6 +184,7 @@ def _model_summary(config: dict[str, Any]) -> dict[str, Any]:
             node_type_count=env.GRAPH_NODE_TYPE_COUNT,
             edge_type_count=env.GRAPH_EDGE_TYPE_COUNT,
             gnn_layers=config["gnn_layers"], attention_heads=config["attention_heads"],
+            shared_kv_film=config.get("shared_kv_film", False),
             physical_gating=config.get("physical_gating", False),
             physical_gate_initial=config.get("physical_gate_initial", 0.9),
         )

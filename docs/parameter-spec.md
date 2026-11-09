@@ -1190,3 +1190,69 @@ None
 ## Validation Notes
 
 124项定向测试通过；独立完整state示例预检和真实旧checkpoint回载通过。三组物理头、四个门控维度与四个32维Value head一致（hidden128时）。真实六维边映射、负收益／裕量、M3后状态、跨图拼接、单入边、PPO概率一致性、两／三进程缺关系梯度与保存回载均有测试。
+
+---
+
+Doc-ID: PARAM-2026-11-09-002
+Doc-Type: params
+Owner: Codex
+Date: 2026-11-09
+Version: v1.0
+Status: final
+Source: 独立共享 K/V＋类型 FiLM 实现的默认参数及静态动态配置
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- shared_kv_film 默认 false，独立示例 true；physical_gating 明确 false，两者暂时互斥。
+- 每层 K/V 各一个128×128矩阵，三张10×128类型表，层间独立；缩放初始1、偏置初始0。
+- 完整模型420130参数；沿用原静态／动态训练超参数，不预设性能收益。
+
+## Assumptions
+
+- 示例 dataset1_cost0、unified23／enhanced25、两层四头；未更改现有训练配置或启动正式训练。
+
+## Open Questions
+
+- None
+
+## Context
+
+FiLM 根据十种有向关系逐维调制共享 K/V 的节点投影，不读取六维物理信号；节点 Value 调制后再加原边 Value，按原 softmax 权重聚合。
+
+## Parameter Table
+
+| 参数／属性 | 类型 | 默认／示例值 | 范围／依赖 |
+| --- | --- | --- | --- |
+| shared_kv_film | bool | false／true | 仅 gnn_attention；与 physical_gating 互斥 |
+| shared_kv_film_schema_version | int | 开启时 checkpoint 自动保存1 | 工厂不接受其它版本 |
+| shared_key／shared_value | Linear | hidden_dim→hidden_dim，无偏置 | 两矩阵不同、跨关系共享、层间独立 |
+| film_key_scale | Parameter | ones(edge_type_count, hidden_dim) | 每维任意实数，不使用 Sigmoid |
+| film_value_scale | Parameter | ones(edge_type_count, hidden_dim) | 每维任意实数 |
+| film_value_bias | Parameter | zeros(edge_type_count, hidden_dim) | 每维任意实数，仅加在节点 V |
+| 示例 hidden／layers／heads | int | 128／2／4 | 每 head32维；hidden 必须整除 heads |
+| 示例关系数量 | int | 10 | 正反向分别学习，不采用门控的三组分类 |
+| 示例物理门控 | bool | false | 不生成物理输入，不增加门控900参数 |
+| 静态／动态episodes | int | 20000／10000 | 独立输出，batch64、seed7／eval1007 |
+| 静态学习率／熵系数 | float | 3e-4→5e-5／.02→.005 | 保持原训练计划 |
+| 动态学习率／熵系数 | float | 1e-4→2e-5／.01→.003 | 保持原微调计划 |
+| 示例设备／进程数 | str／int | cuda／1 | 手动选择空闲GPU；未自动占用 |
+| 动态 initialize_from | 路径 | 示例不预填 | 微调必须显式指定新 FiLM 静态 checkpoints/best.pt |
+
+## Constraint Rules
+
+- 不设置静态类型 K 偏置：当前按关系和目标节点归一化时相同加数抵消；若未来更改归一化或 K 后处理，应重新判断。
+- 类型缩放初始恒等仅对应共享投影基线，不保持原版独立 K/V 的任意策略；旧架构 checkpoint 严格迁移拒绝。
+- Query、原边分数／Value、关系内 softmax、Actor/Critic 与环境输入定义保持原逻辑。
+- 新配置 unique 输出根为 outputs/shared_kv_film/dataset1/{static,dynamic}/GNN；动态 source 由实际静态运行子目录确定，不能硬编码缺失路径。
+- 新增开关不进入旧 checkpoint kwargs，关闭路径不消耗新增随机初始化；两个扩展默认均关闭。
+
+## Preset Profiles
+
+- 原版基线：两个开关均 false 或省略，完整 state 参数1002274。
+- 类型 FiLM：shared_kv_film=true、physical_gating=false，完整 state 参数420130。
+- 原物理门控独立消融：shared_kv_film=false、physical_gating=true，完整 state 参数1003174。
+
+## Validation Notes
+
+82项定向测试通过。完整参数量由实际构建核对，独立静态配置 CPU 数据／超参数审查通过；两／三进程梯度、静态动态 checkpoint 迁移、真实旧模型严格回载与两个原分支回归通过。正式训练收敛效果和墙钟速度尚未测量。
