@@ -1122,3 +1122,71 @@ None
 ## Validation Notes
 
 三个数据集全数据审核、输入／配对预检均通过；21项组合测试通过，随后新增的总启动扇出检查也通过。三进程MLP与GNN全局batch64梯度和单进程一致性在浮点容差内通过。手动命令见docs/simplestate-training.md。
+
+---
+
+Doc-ID: PARAM-2026-11-09-001
+Doc-Type: params
+Owner: Codex
+Date: 2026-11-09
+Version: v1.0
+Status: final
+Source: 六维当前物理信号驱动三类四头门控，保留原模型默认行为
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- physical_gating默认false；开启只适用于gnn_attention，示例初始门值约0.9。
+- 六维信号以当前工序间释放阶段定义，普通边和辅助边分配到不同工序端点，结构和不适用边门值1。
+- 共享6→16→16、三组16→8→4网络两层共用，共900参数；完整GNN1,003,174参数。
+
+## Assumptions
+
+- 本次不引入FiLM、共享K/V、Dropout、奖励变更或新正式训练。
+- 负补偿裕量与负时间收益保留，不截为0；六维仅由当前可观测状态计算。
+
+## Open Questions
+
+None
+
+## Context
+
+图节点与边原始13／2维保持；物理信号单独保存在physical_node_features[N,6]，适用性保存在physical_edge_mask[E]。门控产生[E,heads]，在原attention softmax后控制完整Value。
+
+## Parameter Table
+
+| 参数／常量 | 类型 | 默认／本次值 | 范围／单位／依赖 |
+| --- | --- | --- | --- |
+| physical_gating | bool | false；新示例true | 仅GNN，默认schema与旧权重保持 |
+| physical_gate_initial | float | .9 | 严格(0,1)，有限值；控制bias，非精确门值 |
+| physical_gate_schema_version | int | checkpoint开启时1 | 模型自动保存，回载不接受其它版本 |
+| 物理输入／编码宽度 | int | 6／16／16 | 架构固定，Tanh |
+| 三组门控头宽度 | int | 16／8／attention_heads | 架构固定，默认四头，Tanh＋Sigmoid |
+| 门控共享 | 架构 | 层间共享、同组正反共享 | 三类普通／去应力／补偿，不是十个独立头 |
+| 初始末层weight标准差 | float | .001 | 小非零，使物理编码器首步可获梯度 |
+| 时间尺度S | float | max(1,duration_scale) | 原环境可见实例时间尺度 |
+| 变形比例 | float | D/A | A来自当前已完成工序，避免用下一工序参数 |
+| 当前／M3后裕量 | float | (θ−D)/θ、(θ−D_after_relief)/θ | 有符号，θ缺失／非正则门控不适用 |
+| 净时间收益 | float | (剩余自然等待−已知最快M3类等待与处理)/S | 有符号，不含未来补偿和最终排程收益 |
+| 已用M3标志 | bool转float | 当前普通工序间阶段是否完成去应力 | 以最近NORMAL之后history判定 |
+| 静态／动态episodes | int | 20000／10000 | 新示例，全局回合，不修改旧模板 |
+| 新示例GPU进程数 | int | 1 | 多卡须匹配distributed_world_size与torchrun |
+| 新示例seed／batch | int | 7／64 | 延续原协议，动态使用新门控静态best |
+
+## Constraint Rules
+
+- first／busy／finished／远期工序间隔及结构关系的适用mask为false，门值严格1；普通关系4/5仅当前待加工工序，辅助6–9仅上一已完成工序对应当前间隔。
+- M3按stress_relief角色读取，不写死机器ID；阈值有效且启用补偿才启用六维门控。缺失去应力时第3、4项置0。
+- 门控后消息不再次归一化，节点和边Value合并后整体缩放；安全约束仍由环境合法动作实现。
+- 开关关闭不实例化额外模块、不消耗新增初始化随机数，checkpoint_kwargs保持旧结构；开启时要求10种FJSP关系。
+- 新旧有无门控checkpoint不能静默混载；新的门控static/dynamic兼容，模型kwargs持久化固定架构和语义版本。
+
+## Preset Profiles
+
+- 原模型：原配置，不添加physical_gating，保持默认false与原图字段。
+- 门控：新configs/physical_gate示例，900参数增量、初始约0.9，独立unique输出；尚未启动。
+- 消融诊断：get_edge_gates导出每边每头门值，归一化前后语义明确；单元测试可注入全1／全0验证路径。
+
+## Validation Notes
+
+124项定向测试通过；独立完整state示例预检和真实旧checkpoint回载通过。三组物理头、四个门控维度与四个32维Value head一致（hidden128时）。真实六维边映射、负收益／裕量、M3后状态、跨图拼接、单入边、PPO概率一致性、两／三进程缺关系梯度与保存回载均有测试。

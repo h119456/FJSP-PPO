@@ -1190,7 +1190,80 @@ class DeformationFJSPEnv:
             occupied / max(1.0, self.current_time, self._duration_scale),
         )
 
-    def get_graph_state(self, actions: list[Action] | None = None) -> dict[str, Any]:
+    PHYSICAL_GATE_FEATURE_NAMES = (
+        "deformation_to_saturation_ratio",
+        "normalized_remaining_natural_dwell",
+        "current_compensation_margin",
+        "normalized_relief_release_time_gain",
+        "post_relief_compensation_margin",
+        "relief_used_in_current_interval",
+    )
+
+    def _physical_gate_graph_fields(self) -> dict[str, Any]:
+        """Build independent current-observation snapshots, never future events.
+
+        Ordinary edges use the next operation; auxiliary edges use the last
+        completed operation whose release interval is currently being tracked.
+        Future/past intervals, busy jobs and structural edges stay ungated.
+        """
+        physical = np.zeros((len(self._graph_node_types), 6), dtype=np.float32)
+        normal_nodes = np.zeros(len(self._graph_node_types), dtype=bool)
+        auxiliary_nodes = np.zeros(len(self._graph_node_types), dtype=bool)
+        threshold = self.instance.compensation.trigger_deformation
+        threshold_valid = self.instance.compensation.enabled and threshold is not None and threshold > 0
+        if not threshold_valid:
+            return {"physical_node_features": physical,
+                    "physical_edge_mask": np.zeros(len(self._graph_edge_types), dtype=bool)}
+        time_scale = max(1.0, self._duration_scale)
+        for job in self._active_job_specs():
+            runtime = self.jobs[job.job_id]
+            completed = self._completed_operation(job.job_id)
+            current = self._operation(job.job_id)
+            if completed is None or current is None or runtime.busy:
+                continue
+            saturation = (completed.deformation_scale if completed.deformation_scale is not None
+                          else self.instance.physics.default_deformation_scale)
+            deformation = self.compute_deformation(job.job_id)
+            remaining = self.remaining_dwell(job.job_id)
+            relief = self.instance.stress_relief
+            relief_defined = relief.enabled and relief.allowed_after(completed.operation_id) and bool(relief.machines)
+            # Earliest completion using currently known machine occupancy.
+            # This is a release-time gain, not predicted final-makespan gain;
+            # it excludes queues/compensation caused by future scheduling.
+            gain = 0.0
+            post_margin = 0.0
+            if relief_defined:
+                relief_finish = min(
+                    max(0.0, self.ledger.available_at[machine] - self.current_time) + duration
+                    for machine, duration in relief.machines.items()
+                )
+                gain = (remaining - relief_finish) / time_scale
+                post_deformation = self.apply_stress_relief(job.job_id, deformation)
+                post_margin = (threshold - post_deformation) / threshold
+            used = False
+            for event in reversed(runtime.history):
+                if event.startswith("NORMAL:"):
+                    break
+                if event.startswith("STRESS_RELIEF:"):
+                    used = True
+            vector = [deformation / max(1e-9, saturation), remaining / time_scale,
+                      (threshold - deformation) / threshold, gain, post_margin, float(used)]
+            previous_node = self._graph_operation_nodes[(job.job_id, completed.operation_id)]
+            next_node = self._graph_operation_nodes[(job.job_id, current.operation_id)]
+            # Same interval context, two distinct semantic operation endpoints.
+            physical[previous_node] = vector
+            physical[next_node] = vector
+            normal_nodes[next_node] = True
+            auxiliary_nodes[previous_node] = True
+        relations = self._graph_edge_types
+        sources, destinations = self._graph_edge_index
+        # Relation IDs 4/6/8 start at operation, their reverse ends there.
+        operation_nodes = np.where(relations % 2 == 0, sources, destinations)
+        normal = ((relations == 4) | (relations == 5)) & normal_nodes[operation_nodes]
+        auxiliary = (relations >= 6) & auxiliary_nodes[operation_nodes]
+        return {"physical_node_features": physical, "physical_edge_mask": normal | auxiliary}
+
+    def get_graph_state(self, actions: list[Action] | None = None, *, include_physics: bool = False) -> dict[str, Any]:
         """Return dynamic heterogeneous graph features for the GNN policy."""
 
         selected = self.get_valid_actions() if actions is None else actions
@@ -1360,7 +1433,7 @@ class DeformationFJSPEnv:
             if action.machine_id is not None:
                 action_nodes[index, 2] = self._graph_machine_nodes[action.machine_id]
 
-        return {
+        result = {
             "node_features": features,
             "node_types": self._graph_node_types,
             "edge_index": self._graph_edge_index,
@@ -1368,6 +1441,9 @@ class DeformationFJSPEnv:
             "edge_features": self._graph_edge_features,
             "action_nodes": action_nodes,
         }
+        if include_physics:
+            result.update(self._physical_gate_graph_fields())
+        return result
 
     def get_action_features(self, actions: list[Action] | None = None) -> list[list[float]]:
         selected = self.get_valid_actions() if actions is None else actions

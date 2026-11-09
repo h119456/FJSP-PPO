@@ -323,6 +323,8 @@ def train(
         edge_type_count=env.GRAPH_EDGE_TYPE_COUNT,
         gnn_layers=int(config.get("gnn_layers", 2)),
         attention_heads=int(config.get("attention_heads", 4)),
+        physical_gating=config.get("physical_gating", False),
+        physical_gate_initial=float(config.get("physical_gate_initial", 0.9)),
     ).to(device)
     ppo_config = PPOConfig(
         **{

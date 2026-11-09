@@ -1214,3 +1214,68 @@ None
 ## Follow-ups
 
 当前完整state训练完成后，用户按docs/simplestate-training.md手动执行--dataset all，或在三个终端分别启动--dataset 1/2/3。
+
+---
+
+Doc-ID: IMPL-2026-11-09-001
+Doc-Type: implementation
+Owner: Codex
+Date: 2026-11-09
+Version: v1.0
+Status: final
+Source: 保留原GNN，加入六维物理信号、共享6→16→16编码器及三类16→8→4边门控，并提供数据处理框图
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 新增默认关闭的物理门控；原关系K/V、Actor/Critic、奖励、输入profile与合法动作机制保持原协议。
+- 六维物理信号在当前释放间隔生成，经图快照、Rollout、GraphBatch传至共享编码器和三组门控头；每边四个门值在softmax后缩放完整Value。
+- 模块两层共享，普通／去应力／补偿正反边分三组，新增900参数；结构边与不适用阶段门值固定1。
+
+## Assumptions
+
+- 本次只实现已确认的物理门控，未同时实现共享K/V或FiLM，不启动新门控正式训练。
+- “保留原有代码”采用开关和兼容旧schema保留原运行路径；已有训练配置不加开关，后续模型仍是原GNN。
+- 多去应力设备时净收益取当前已知最早释放完成者，信号为工序阶段上下文，不逐机器独立生成。
+
+## Open Questions
+
+None
+
+## Plan Summary
+
+核对现有图与物理模型，加入按需物理字段、门控模块及消息缩放，打通采样／验证／checkpoint，执行梯度和兼容测试，提供独立配置及Mermaid框图。
+
+## Changes (by file/module)
+
+- environment/fjsp_env.py：新增六维字段名、当前工序间隔映射、适用mask、独立物理快照；get_graph_state新增include_physics可选参数，默认保持原返回字段。
+- models/physical_gate.py：共享6→16→16 Tanh编码器、三组16→8→heads Tanh/Sigmoid头；初值约0.9，初始化末层小非零权重，结构和不适用边输出1。
+- models/graph_actor_critic.py：开关、两层共享门控、get_edge_gates诊断接口及兼容旧schema的checkpoint kwargs。
+- models/graph_attention.py：关系内softmax后乘门控，整体控制节点投影加边投影Value，无再次归一化。
+- models/graph_batch.py：按需校验拼接物理节点信号和边mask；rollout原图快照保留新增字段。
+- algorithms/ppo.py、evaluation/runner.py：只在门控模型采样与评估时请求include_physics图；train.py和models/factory.py读取开关并支持保存回载。
+- scripts/check_comparison.py：识别门控架构选项、实际构建门控网络校验；原配置检查逻辑不变。
+- configs/physical_gate/full_gnn_static.json、full_gnn_dynamic.json：独立dataset1_cost0完整state单卡示例，静态20k／动态10k，unique输出；动态需要显式指定新门控静态best。
+- tests/test_physical_gate.py：物理信号、mask／方向／阶段、旧路径、概率与checkpoint全链测试；tests/test_distributed_ppo.py增加门控GNN两／三进程缺关系梯度测试。
+- docs/physical-gating.md：六维定义、代码位置、配置、诊断、边类型表及完整数据处理Mermaid框图；本报告和parameter-spec只追加记录，保留feasibility既有改动。
+
+## Tests Run
+
+- 43项通过，16.37秒：physical_gate、graph_performance、state_training、comparison、simplestate_pipeline。
+- 54项通过，22.50秒：distributed_ppo、dynamic_input_visibility、environment，包含两／三进程门控GNN梯度等价和缺关系DDP。
+- 27项通过，6.61秒：state_launcher、state_ablation_configs、parallel_validation、distributed_training、base_state_profile、dynamic_environment。
+- 合计124项定向测试通过；同样覆盖旧图forward／grad兼容、完整Value门控和单入边行为、快照独立、隐藏信息不泄漏、真实静态到动态训练与新checkpoint回载。
+- 独立静态配置CPU预检通过，参数总量1,003,174；真实fullstate dataset1 GNN旧best严格回载通过，未启用门控。
+- git diff --check通过；北京时间11:15核对三条simplestate监督状态均training、实际进程存活、原配置physical_gating为false，无错误。
+
+## Risks and Rollback Notes
+
+- 当前运行进程不热加载已import模块；之后启动的原配置默认关闭门控，仍为旧架构。未停止、重启或修改现有训练输出。
+- 新开关模型改变schema，旧无门控checkpoint严格迁移会拒绝；新门控静态checkpoint可以按原initialize_from语义仅迁移权重到动态。
+- 初始约0.9门值不等于完全保持旧策略，不宣称无损迁移；性能和额外墙钟开销尚需正式消融。
+- 默认门控分支不计算物理字段；仅启用时增加图构造与推理成本。没有新增未来信息或修改调度约束。
+- 停用门控只需使用原配置；门控结果放独立outputs/physical_gate目录，不覆盖fullstate／simplestate产物。
+
+## Follow-ups
+
+按docs/physical-gating.md查看完整框图与门控导出接口。正式训练需另行选择数据集／state和GPU；先基线与门控对照，不同时引入共享K/V和FiLM。

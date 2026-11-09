@@ -29,7 +29,9 @@ def evaluate_model(
         graph_state = None
         if bool(getattr(model, "requires_graph", False)):
             graph_started = time.perf_counter()
-            graph_state = env.get_graph_state(actions)
+            graph_state = env.get_graph_state(
+                actions, **({"include_physics": True} if getattr(model, "physical_gating", False) else {}),
+            )
             timer.graph_construction_seconds += time.perf_counter() - graph_started
         started = time.perf_counter()
         choice, _, _ = model.act(

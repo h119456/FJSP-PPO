@@ -80,6 +80,7 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
         edge_types: torch.Tensor,
         edge_features: torch.Tensor,
         relation_indices: dict[int, torch.Tensor] | None = None,
+        edge_gates: torch.Tensor | None = None,
     ) -> torch.Tensor:
         sources, destinations = edge_index
         node_count = nodes.shape[0]
@@ -116,6 +117,10 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
             attention = self._destination_softmax(
                 scores, relation_destinations, node_count
             )
+            if edge_gates is not None:
+                # Scale the complete node+edge value after normalization.
+                # No renormalization: even a singleton relation can attenuate.
+                attention = attention * edge_gates.index_select(0, relation_index)
             messages = (attention.unsqueeze(-1) * values).reshape(
                 -1, self.hidden_dim
             )

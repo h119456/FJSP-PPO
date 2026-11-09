@@ -19,8 +19,12 @@ def build_actor_critic(
     **kwargs: Any,
 ) -> nn.Module:
     if model_type == "mlp":
+        if kwargs.get("physical_gating", False):
+            raise ValueError("physical_gating is available only for gnn_attention")
         return ActorCritic(state_dim, action_dim, hidden_dim)
     if model_type == "gnn_attention":
+        if kwargs.get("physical_gate_schema_version", 1) != 1:
+            raise ValueError("unsupported physical gate schema version")
         return GraphActorCritic(
             state_dim,
             action_dim,
@@ -31,6 +35,8 @@ def build_actor_critic(
             edge_type_count=int(kwargs["edge_type_count"]),
             gnn_layers=int(kwargs.get("gnn_layers", 2)),
             attention_heads=int(kwargs.get("attention_heads", 4)),
+            physical_gating=kwargs.get("physical_gating", False),
+            physical_gate_initial=float(kwargs.get("physical_gate_initial", 0.9)),
         )
     raise ValueError(
         f"unknown model_type {model_type!r}; choose 'mlp' or 'gnn_attention'"

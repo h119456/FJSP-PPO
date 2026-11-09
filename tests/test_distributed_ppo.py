@@ -29,19 +29,29 @@ def _model_and_buffer(model_type: str, sample_count: int = 7):
     else:
         env = ResidualStressFJSPEnv(tiny_instance(jobs=2))
         state, info = env.reset()
-        graph = env.get_graph_state(info["valid_actions"])
+        gated = model_type == "gnn_physical"
+        if gated:
+            from tests.helpers import choose
+            env.step(choose(env, "NORMAL", job_id="J1", machine="M1"))
+            while env.jobs["J1"].busy:
+                env.step(choose(env, "WAIT"))
+            state, info = env.get_observation(), {"valid_actions":env.get_valid_actions(), "action_features":env.get_action_features()}
+        graph = env.get_graph_state(info["valid_actions"], include_physics=gated)
         # Leave some relation modules unused on purpose: valid FJSP graphs
         # can lack individual process/auxiliary relations on either rank.
-        keep = graph["edge_types"] < 2
+        keep = graph["edge_types"] < (8 if gated else 2)
         graph["edge_index"] = graph["edge_index"][:, keep]
         graph["edge_types"] = graph["edge_types"][keep]
         graph["edge_features"] = graph["edge_features"][keep]
+        if gated:
+            graph["physical_edge_mask"] = graph["physical_edge_mask"][keep]
         model = build_actor_critic(
-            model_type, env.OBSERVATION_DIM, env.ACTION_FEATURE_DIM, 8,
+            "gnn_attention", env.OBSERVATION_DIM, env.ACTION_FEATURE_DIM, 8,
             node_feature_dim=env.GRAPH_NODE_FEATURE_DIM,
             edge_feature_dim=env.GRAPH_EDGE_FEATURE_DIM,
             node_type_count=env.GRAPH_NODE_TYPE_COUNT,
             edge_type_count=env.GRAPH_EDGE_TYPE_COUNT,
+            physical_gating=gated,
         )
         observations = [state[:] for _ in range(sample_count)]
         candidates = [info["action_features"] for _ in range(sample_count)]
@@ -92,7 +102,7 @@ def _distributed_worker(rank: int, directory: str, model_type: str,
         dist.destroy_process_group()
 
 
-@pytest.mark.parametrize("model_type", ["mlp", "gnn_attention"])
+@pytest.mark.parametrize("model_type", ["mlp", "gnn_attention", "gnn_physical"])
 @pytest.mark.parametrize("world_size,batch_size,sample_count", [(2, 3, 7), (3, 64, 67)])
 def test_ddp_update_matches_global_batch_with_masked_padding(
     tmp_path, model_type, world_size, batch_size, sample_count,

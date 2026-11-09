@@ -10,6 +10,7 @@ from torch.distributions import Categorical
 
 from .graph_attention import HeterogeneousGraphAttentionLayer
 from .graph_batch import GraphBatch, GraphState, batch_graph_states
+from .physical_gate import PhysicalEdgeGate
 
 
 class GraphActorCritic(nn.Module):
@@ -30,6 +31,8 @@ class GraphActorCritic(nn.Module):
         edge_type_count: int,
         gnn_layers: int = 2,
         attention_heads: int = 4,
+        physical_gating: bool = False,
+        physical_gate_initial: float = 0.9,
     ) -> None:
         super().__init__()
         if gnn_layers != 2:
@@ -43,6 +46,10 @@ class GraphActorCritic(nn.Module):
         self.edge_type_count = edge_type_count
         self.gnn_layers = gnn_layers
         self.attention_heads = attention_heads
+        if not isinstance(physical_gating, bool):
+            raise ValueError("physical_gating must be boolean")
+        self.physical_gating = physical_gating
+        self.physical_gate_initial = physical_gate_initial
         self.node_encoders = nn.ModuleList(
             nn.Sequential(
                 nn.Linear(node_feature_dim, hidden_dim),
@@ -83,14 +90,18 @@ class GraphActorCritic(nn.Module):
             nn.Tanh(),
             nn.Linear(hidden_dim, 1),
         )
+        if physical_gating:
+            if edge_type_count != 10:
+                raise ValueError("physical gating requires the ten-relation FJSP schema")
+            self.physical_gate = PhysicalEdgeGate(attention_heads, physical_gate_initial)
 
     @property
     def device(self) -> torch.device:
         return next(self.parameters()).device
 
     @property
-    def checkpoint_kwargs(self) -> dict[str, int]:
-        return {
+    def checkpoint_kwargs(self) -> dict:
+        kwargs = {
             "node_feature_dim": self.node_feature_dim,
             "edge_feature_dim": self.edge_feature_dim,
             "node_type_count": self.node_type_count,
@@ -98,6 +109,17 @@ class GraphActorCritic(nn.Module):
             "gnn_layers": self.gnn_layers,
             "attention_heads": self.attention_heads,
         }
+        # Preserve the exact legacy schema and state_dict when the gate is off.
+        if self.physical_gating:
+            kwargs.update(physical_gating=True, physical_gate_initial=self.physical_gate_initial,
+                          physical_gate_schema_version=1)
+        return kwargs
+
+    def get_edge_gates(self, graph: GraphBatch) -> torch.Tensor:
+        """Return [edges, heads] without retaining diagnostic tensors in PPO."""
+        if self.physical_gating:
+            return self.physical_gate(graph)
+        return graph["node_features"].new_ones((graph["edge_types"].numel(), self.attention_heads))
 
     def _encode_nodes(self, graph: GraphBatch) -> torch.Tensor:
         features = graph["node_features"]
@@ -119,6 +141,7 @@ class GraphActorCritic(nn.Module):
                 encoded.index_copy_(
                     0, type_indices, encoder(features.index_select(0, type_indices))
                 )
+        gates = self.get_edge_gates(graph) if self.physical_gating else None
         for layer in self.message_layers:
             encoded = layer(
                 encoded,
@@ -126,6 +149,7 @@ class GraphActorCritic(nn.Module):
                 graph["edge_types"],
                 graph["edge_features"],
                 graph.get("edge_type_indices"),
+                **({"edge_gates": gates} if gates is not None else {}),
             )
         return encoded
 

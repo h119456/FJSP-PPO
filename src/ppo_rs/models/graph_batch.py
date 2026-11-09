@@ -33,6 +33,9 @@ def batch_graph_states(
     edge_types: list[torch.Tensor] = []
     edge_features: list[torch.Tensor] = []
     node_batches: list[torch.Tensor] = []
+    physical_nodes: list[torch.Tensor] = []
+    physical_masks: list[torch.Tensor] = []
+    include_physics = "physical_node_features" in states[0]
     action_nodes = torch.full(
         (len(states), action_slots, 3),
         -1,
@@ -47,6 +50,15 @@ def batch_graph_states(
         relation_types = _cpu_tensor(state["edge_types"], torch.long)
         relation_features = _cpu_tensor(state["edge_features"], torch.float32)
         lookup = _cpu_tensor(state["action_nodes"], torch.long)
+        if ("physical_node_features" in state) != include_physics or ("physical_edge_mask" in state) != include_physics:
+            raise ValueError("all graph states must use the same physical feature schema")
+        if include_physics:
+            physical = _cpu_tensor(state["physical_node_features"], torch.float32)
+            applicable = _cpu_tensor(state["physical_edge_mask"], torch.bool)
+            if physical.shape != (nodes.shape[0], 6) or applicable.shape != relation_types.shape:
+                raise ValueError("physical graph fields have incompatible shapes")
+            physical_nodes.append(physical)
+            physical_masks.append(applicable)
         if lookup.shape[0] > action_slots:
             raise ValueError("graph action count exceeds padded action slots")
 
@@ -89,6 +101,9 @@ def batch_graph_states(
         "action_nodes": action_nodes,
     }
     result = {key: value.to(device=device) for key, value in fields.items()}
+    if include_physics:
+        result["physical_node_features"] = torch.cat(physical_nodes).to(device=device)
+        result["physical_edge_mask"] = torch.cat(physical_masks).to(device=device)
     # Transfer all small type-index arrays together, then expose device views.
     # Absence remains CPU metadata, so skipped modules keep grad=None in DDP.
     grouped = (node_type_indices, edge_type_indices)
