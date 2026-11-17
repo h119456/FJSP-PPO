@@ -53,6 +53,7 @@ def _model_and_buffer(model_type: str, sample_count: int = 7):
             edge_type_count=env.GRAPH_EDGE_TYPE_COUNT,
             physical_gating=gated,
             shared_kv_film=model_type == "gnn_film",
+            shared_kv_only=model_type == "gnn_shared_kv",
         )
         observations = [state[:] for _ in range(sample_count)]
         candidates = [info["action_features"] for _ in range(sample_count)]
@@ -103,7 +104,7 @@ def _distributed_worker(rank: int, directory: str, model_type: str,
         dist.destroy_process_group()
 
 
-@pytest.mark.parametrize("model_type", ["mlp", "gnn_attention", "gnn_physical", "gnn_film"])
+@pytest.mark.parametrize("model_type", ["mlp", "gnn_attention", "gnn_physical", "gnn_film", "gnn_shared_kv"])
 @pytest.mark.parametrize("world_size,batch_size,sample_count", [(2, 3, 7), (3, 64, 67)])
 def test_ddp_update_matches_global_batch_with_masked_padding(
     tmp_path, model_type, world_size, batch_size, sample_count,

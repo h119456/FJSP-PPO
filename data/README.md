@@ -1,5 +1,19 @@
 # 合成调度数据集
 
+## 独立故障动态测试集（2026-11-16）
+
+`dynamic_fault_test100_cost0/` 是新生成的测试专用集合，三个规模各100例，总计300例：
+
+| 对应数据集 | 可直接传给评估器的目录 | 仅故障 | 故障＋插单 |
+|---|---|---:|---:|
+| set1，cost0 | `data/dynamic_fault_test100_cost0/set1/test` | 67 | 33 |
+| set2，cost0 | `data/dynamic_fault_test100_cost0/set2/test` | 67 | 33 |
+| set3，cost0 | `data/dynamic_fault_test100_cost0/set3/test` | 67 | 33 |
+
+配额来自原动态数据10%仅故障／5%混合场景的条件比例2:1，100例按最大余数法取整。基础调度实例全部独立生成，与三组既有cost0的train／validation／test基础实例逐一去重；不包含无事件或仅插单场景。沿用原事件强度、物理参数与pause-repair-resume规则，仅去应力和补偿费用为0。固定事件轨迹对全部模型一致，未来事件与未释放工件隐藏。
+
+`manifest.json` 保存种子、配额、来源和逐文件SHA256，`validation_report.json` 保存校验结果。生成入口为 `scripts/generate_fault_test100.py`；用 `python scripts/generate_fault_test100.py --check` 复检。该集合报告故障条件下的能力，其均值不代表原混合动态分布。
+
 所有容量均指每个静态或动态子集的实例数量。工序数为每件普通加工工序数，不包含调度时按需插入的应力消除和补偿。
 
 | 数据集 | train / validation / test | 工件数 | 每件工序数 | 普通加工设备 | 设备总数 |

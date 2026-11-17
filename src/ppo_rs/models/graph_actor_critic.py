@@ -32,6 +32,7 @@ class GraphActorCritic(nn.Module):
         gnn_layers: int = 2,
         attention_heads: int = 4,
         shared_kv_film: bool = False,
+        shared_kv_only: bool = False,
         physical_gating: bool = False,
         physical_gate_initial: float = 0.9,
     ) -> None:
@@ -49,11 +50,14 @@ class GraphActorCritic(nn.Module):
         self.attention_heads = attention_heads
         if not isinstance(shared_kv_film, bool):
             raise ValueError("shared_kv_film must be boolean")
+        if not isinstance(shared_kv_only, bool):
+            raise ValueError("shared_kv_only must be boolean")
         if not isinstance(physical_gating, bool):
             raise ValueError("physical_gating must be boolean")
-        if shared_kv_film and physical_gating:
-            raise ValueError("shared_kv_film and physical_gating are separate experiments; enable only one")
+        if sum((shared_kv_film, shared_kv_only, physical_gating)) > 1:
+            raise ValueError("shared K/V variants and physical_gating are separate experiments; enable only one")
         self.shared_kv_film = shared_kv_film
+        self.shared_kv_only = shared_kv_only
         self.physical_gating = physical_gating
         self.physical_gate_initial = physical_gate_initial
         self.node_encoders = nn.ModuleList(
@@ -72,6 +76,7 @@ class GraphActorCritic(nn.Module):
                 edge_type_count,
                 attention_heads,
                 shared_kv_film=shared_kv_film,
+                shared_kv_only=shared_kv_only,
             )
             for _ in range(gnn_layers)
         )
@@ -119,6 +124,8 @@ class GraphActorCritic(nn.Module):
         # Preserve the exact legacy schema when both extensions are off.
         if self.shared_kv_film:
             kwargs.update(shared_kv_film=True, shared_kv_film_schema_version=1)
+        if self.shared_kv_only:
+            kwargs.update(shared_kv_only=True, shared_kv_only_schema_version=1)
         if self.physical_gating:
             kwargs.update(physical_gating=True, physical_gate_initial=self.physical_gate_initial,
                           physical_gate_schema_version=1)

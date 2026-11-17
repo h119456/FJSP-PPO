@@ -792,6 +792,152 @@ MLP于北京时间2026-11-05 18:30:50完成本轮动态微调，累计10,000回�
 
 ---
 
+Doc-ID: QA-2026-11-12-001
+Doc-Type: qa
+Owner: user
+Date: 2026-11-12
+Version: v1.0
+Status: final
+Source: 当前GNN+attention的softmax是跨所有类型邻居，还是按类型分别归一化
+Activated-Skills: qa-basic
+
+## Summary
+
+- 按边关系类型、目标节点和attention head分别softmax。
+- 各关系类型归一化后，消息在目标节点处相加，没有跨关系的第二次softmax。
+- 原版独立K/V及共享K/V＋类型FiLM均沿用该规则；物理门控在softmax后相乘。
+
+## Assumptions
+
+- 依据当前仓库 `HeterogeneousGraphAttentionLayer`；只核查实现并记录问答。
+
+## Open Questions
+
+None
+
+## Question
+
+目前GNN+attention架构的softmax位置，是所有类型邻居统一做，还是不同类型邻居分别做？
+
+## Answer
+
+代码先按 `edge_types` 划分relation，在relation循环内调用 `_destination_softmax(scores, relation_destinations, node_count)`。因此同一目标节点、同一head的同类关系入边权重和为1；不同关系之间不在softmax分母中竞争。各关系加权消息通过 `index_add` 相加。若某节点有两个非空关系类型，门控前两类各自权重和为1，合计为2；若某类只有一个邻居，该类注意力为1。物理门控可在softmax后衰减该权重，且不再归一化。共享K/V改变投影参数共享方式，未改变softmax分组。
+
+## References
+
+- `src/ppo_rs/models/graph_attention.py:110`：按关系选边。
+- `src/ppo_rs/models/graph_attention.py:147`：关系循环内目标节点softmax。
+- `src/ppo_rs/models/graph_attention.py:153`：softmax后物理门控。
+- `src/ppo_rs/models/graph_attention.py:157`：跨关系消息累加。
+
+---
+
+Doc-ID: QA-2026-11-16-001
+Doc-Type: qa
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 验证动态微调效果是否应让静态checkpoint也运行动态测试集
+Activated-Skills: qa-basic
+
+## Summary
+
+- 静态best与动态best在同一动态测试集上配对评估，才能直接衡量动态微调增益。
+- 两者保持相同环境、输入profile、实例顺序、seed和动作选择方式。
+- 同时报全量目标均值与有效完成率，按动态事件场景分组分析。
+
+## Assumptions
+
+- 静态与动态模型属于同一架构和输入schema，动态事件按当前环境语义执行。
+- 本轮只说明对照设计，不启动额外测试。
+
+## Open Questions
+
+None
+
+## Question
+
+如果想验证动态训练结果，是否应该将静态ckpt在动态测试集上跑一次？
+
+## Answer
+
+应该。将静态验证集选出的静态best和动态验证集选出的动态best，分别运行相同200例动态测试集，用相同seed1007+i和确定性动作进行逐例配对比较。两者都应在相同动态环境、相同输入profile下运行。降低目标值的相对增益可按静态模型动态测试全量均值与动态模型同集全量均值计算，同时报告有效完成率、截断和违规数；当有效完成集合不同时，不能仅根据成功实例均值判断优劣。按无事件、仅新作业、仅故障和两者同时发生分组有助于识别微调的收益和代价。静态测试集上的静态结果与动态测试集上的动态结果不能直接用来判断微调收益；checkpoint均由对应验证集选择，不用测试结果重新挑选。
+
+---
+
+Doc-ID: QA-2026-11-16-002
+Doc-Type: qa
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 静态MLP直接评估动态测试集后，可否认为静态训练已具备处理动态事件的能力
+Activated-Skills: qa-basic
+
+## Summary
+
+- 本次完整state MLP在set1动态分布上具备无需动态微调的策略泛化能力。
+- 200例全部完成，其中实际有事件70例；完成率与可行性也受环境和合法动作机制影响。
+- 动态微调整体均值改善约0.064%，故障分组改善而新作业分组退化，不能据此声称所有动态场景都不需要微调。
+
+## Assumptions
+
+- 结论限定当前set1完整state MLP、现有事件生成分布、一次训练及固定测试种子。
+
+## Open Questions
+
+- 更强故障、更多新作业、更多训练／测试种子下的泛化与微调收益尚未验证。
+
+## Question
+
+可以理解为静态训练已经具备了处理动态事件的能力吗？
+
+## Answer
+
+可以理解为当前静态策略已具有一定动态场景泛化能力：静态模型通过当前状态和合法候选动作继续决策，环境执行新作业释放与机器故障，输入／动作接口保持兼容，因而未专门动态训练也能完成调度。本次动态test共200例，130例无事件、40例仅新作业、20例仅故障、10例两类事件；静态模型全部有效完成，平均目标36.814370，动态微调模型36.790970，改善0.063563%。但完成率也包含环境合法动作筛选的作用，不能单靠100%完成证明策略动态响应质量最优。动态微调在仅故障组改善约1.14%，在仅新作业组退化约0.57%；应将结论限定为当前分布上的零样本泛化较好、当前微调的额外总体收益较小。
+
+---
+
+Doc-ID: QA-2026-11-16-003
+Doc-Type: qa
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 解释动态数据中的新作业含义
+Activated-Skills: qa-basic
+
+## Summary
+
+- 作业是需要完成多道工序的一个完整工件或加工任务。
+- 新作业通过job_release事件在运行过程中释放，到达前对策略不可见且不可调度。
+- 当前数据通过延迟释放原实例中的部分作业模拟动态到达，总作业集合预先写在文件内。
+
+## Assumptions
+
+- 按当前数据生成器、动态环境和set1动态测试样本解释。
+
+## Open Questions
+
+None
+
+## Question
+
+新作业是什么？
+
+## Answer
+
+指加工过程中才到达车间、随后加入调度的完整作业，一般包含多道有先后顺序的工序。当前实现把原实例的部分作业标为延迟释放；reset时不放入可见jobs，到达时调用_release_job加入运行状态并更新可见归一化尺度和图结构。以set1动态test的instance_01.json为例，总共6个作业，其中J4在t=3.316释放；t=0只有其余5个作业可见，到达后J4才能参与调度。作业未来到达时间及未释放作业内容对策略不可见，环境按数据中的事件执行。
+
+## References
+
+- `src/ppo_rs/environment/fjsp_env.py`：reset、_release_job。
+- `scripts/generate_dynamic_dataset.py`：job_release生成与可见性约定。
+- `data/dataset1_cost0/dynamic/test/instance_01.json`：J4延迟到达实例。
+
+---
+
 Doc-ID: QA-2026-11-09-001
 Doc-Type: qa
 Owner: user
@@ -861,6 +1007,46 @@ Activated-Skills: qa-basic
 Q表达目标节点当前的信息需求，K表达邻居提供的信息；同一目标节点可用共同的查询空间，通过类型化K学习不同关系的匹配方式。原版K使用各关系独立矩阵，新版K使用共享投影加类型缩放；因此Q共享不等于所有关系的注意力相同。每层的Q仍独立，跨关系共享属于架构取舍，不保证与任意关系独立Q同等表达能力。
 
 两层原K/V共655360参数，新共享K/V共65536，类型FiLM表共7680；其余346914不变，合计1002274→420130。收益来自共享矩阵后用轻量类型参数表达差异，而不是额外添加FiLM本身减少参数。
+
+---
+
+Doc-ID: QA-2026-11-09-003
+Doc-Type: qa
+Owner: Codex
+Date: 2026-11-09
+Version: v1.0
+Status: final
+Source: 简化state与完整state在静态MLP上的表现比较
+Activated-Skills: qa-basic
+
+## Summary
+
+- 三数据集均已完成静态MLP各20000回合，同一数据划分下完整state最佳验证目标更低。
+- dataset1：36.0909（20000回合）对37.7540（18500回合），简化比完整高4.61%。
+- dataset2：56.2459（20000回合）对60.4454（7000回合），简化比完整高7.47%。
+- dataset3：77.3742（7000回合）对81.7675（11000回合），简化比完整高5.68%。
+
+## Assumptions
+
+- 比较各自最佳验证checkpoint，100例静态验证、cost0，目标等于makespan，越低越好。
+- 两组seed7、eval1007、hidden128、batch64及主要优化超参数相同，但GPU进程数不同；仅单次seed结果，不是多seed统计结论。
+
+## Open Questions
+
+- 需要独立测试集和多seed复评，才能确认泛化差异和稳定性。
+
+## Question
+
+简化state与完整的相比，在静态MLP上的表现如何？
+
+## Answer
+
+当前三数据集最佳验证值一致支持完整state，简化state分别高1.6630、4.1995、4.3932。最终20000回合完整／简化为dataset1 36.0909／38.5165、dataset2 56.2459／63.9978、dataset3 82.3850／86.3966，同样完整更低。简化输入为全局14项加4个动态预留、局部21项；完整为全局19项加相同4个预留、局部25项。两组参数90370／92162，容量差约2%，当前结果更支持扩充特征有帮助，但不能排除单seed优化波动和不同rank数的影响。
+
+## References
+
+- outputs/fullstate_jingtai_set{1,2,3}/MLP/validation_history.json、best_evaluation.json、training_config.json。
+- outputs/simplestate_jingtai_set{1,2,3}/MLP/validation_history.json、best_evaluation.json、training_config.json。
 - `outputs/fullstate_dongtai_set1/MLP/validation_history.json`、`best_evaluation.json`、`checkpoint_summary.json`。
 - `outputs/fullstate_dongtai_set1/MLP/training_history.json`。
 

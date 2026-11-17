@@ -1,0 +1,82 @@
+{
+  "passed": true,
+  "total_instances": 300,
+  "sets": {
+    "set1": {
+      "instances": 100,
+      "scenario_counts": {
+        "breakdown_only": 67,
+        "both": 33
+      },
+      "jobs": {
+        "6": 20,
+        "7": 20,
+        "8": 20,
+        "9": 20,
+        "10": 20
+      },
+      "total_machines": {
+        "6": 100
+      },
+      "overlaps_with_existing": 0
+    },
+    "set2": {
+      "instances": 100,
+      "scenario_counts": {
+        "breakdown_only": 67,
+        "both": 33
+      },
+      "jobs": {
+        "12": 12,
+        "13": 11,
+        "14": 11,
+        "15": 11,
+        "16": 11,
+        "17": 11,
+        "18": 11,
+        "19": 11,
+        "20": 11
+      },
+      "total_machines": {
+        "8": 20,
+        "9": 20,
+        "10": 20,
+        "11": 20,
+        "12": 20
+      },
+      "overlaps_with_existing": 0
+    },
+    "set3": {
+      "instances": 100,
+      "scenario_counts": {
+        "breakdown_only": 67,
+        "both": 33
+      },
+      "jobs": {
+        "18": 8,
+        "19": 8,
+        "20": 8,
+        "21": 8,
+        "22": 8,
+        "23": 8,
+        "24": 8,
+        "25": 8,
+        "26": 8,
+        "27": 7,
+        "28": 7,
+        "29": 7,
+        "30": 7
+      },
+      "total_machines": {
+        "12": 15,
+        "13": 15,
+        "14": 14,
+        "15": 14,
+        "16": 14,
+        "17": 14,
+        "18": 14
+      },
+      "overlaps_with_existing": 0
+    }
+  }
+}

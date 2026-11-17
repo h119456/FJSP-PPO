@@ -1256,3 +1256,1106 @@ FiLM 根据十种有向关系逐维调制共享 K/V 的节点投影，不读取�
 ## Validation Notes
 
 82项定向测试通过。完整参数量由实际构建核对，独立静态配置 CPU 数据／超参数审查通过；两／三进程梯度、静态动态 checkpoint 迁移、真实旧模型严格回载与两个原分支回归通过。正式训练收敛效果和墙钟速度尚未测量。
+
+---
+
+Doc-ID: PARAM-2026-11-10-001
+Doc-Type: params
+Owner: Codex
+Date: 2026-11-10
+Version: v1.0
+Status: final
+Source: 用户指定GPU0–1启动dataset1共享K/V＋类型FiLM静态动态训练
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 完整state、dataset1_cost0、两卡、seed7，静态20k→动态10k，物理门控关闭。
+- 全局batch64，两rank各32；独立结果GNN+FiLM_set1，动态严格加载本次静态best。
+- 沿用原学习率、熵和PPO设置，不按参数减少调整训练预算。
+
+## Assumptions
+
+- 按前文已确认实验顺序先静态后动态；不启用门控或改变现有简化训练配置。
+
+## Open Questions
+
+- None
+
+## Context
+
+scripts/train_gnn_film_set1.py从configs/shared_kv_film模板生成运行配置，保留原模板默认单卡unique示例。
+
+## Parameter Table
+
+| 参数 | 本次值 | 约束 |
+| --- | --- | --- |
+| CUDA_VISIBLE_DEVICES／distributed_world_size | 0,1／2 | 仅两卡，启动前无计算进程 |
+| shared_kv_film／physical_gating | true／false | 独立FiLM实验 |
+| state／action profile | unified23／enhanced25 | 完整state静态动态一致 |
+| hidden／layers／heads | 128／2／4 | 参数420130 |
+| episodes | 静态20000／动态10000 | 全局预算，无自动早停 |
+| batch／episodes_per_update／PPO epochs | 64／10／4 | 每rank32有效样本 |
+| seed／eval_seed | 7／1007 | 相同划分与固定验证事件 |
+| LR | 静态3e-4→5e-5；动态1e-4→2e-5 | 沿用原计划 |
+| entropy | 静态.02→.005；动态.01→.003 | 沿用原计划 |
+| gamma／GAE lambda／clip | 1／.95／.2 | 原PPO设置 |
+| validation／latest／snapshot interval | 500／100／5000 | 均落在update边界 |
+| output | outputs/GNN+FiLM_set1/{static,dynamic} | 父目录存在拒绝覆盖 |
+| initialize_from | 静态无；动态static/checkpoints/best.pt | 动态重置优化器与历史 |
+
+## Constraint Rules
+
+- 静态完整历史及三种checkpoint齐全后才启动动态；迁移schema必须一致，失败不继续。
+- 监督状态与阶段配置独立保存；不修改原模板、原版或门控结果。
+
+## Preset Profiles
+
+- 预检：--check，CPU审核静态完整数据与模型参数，不创建结果。
+- 正式：后台监督，两卡静态→动态，本次已启动。
+
+## Validation Notes
+
+5项启动链测试通过，实际两卡静态数据和模型预检passed=true；已有FiLM梯度／DDP／迁移测试在实现阶段通过。本次正式性能与耗时以新日志测量为准。
+
+---
+
+Doc-ID: PARAM-2026-11-10-002
+Doc-Type: params
+Owner: Codex
+Date: 2026-11-10
+Version: v1.0
+Status: final
+Source: 最新要求GPU2–4排队训练set2 GNN＋物理门控
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- GPU2、3、4，world_size3，完整state，dataset2_cost0，门控开启FiLM关闭。
+- batch64真实有效样本22／22／20，两个填充屏蔽，保持原训练预算与优化设置。
+- 静态20k→动态10k，本次静态best迁移，独立结果GNN+gate_set2。
+
+## Assumptions
+
+- 未改变物理门控模型、原训练代码或已有模板；原set2简化链完成且三卡空闲才启动。
+
+## Open Questions
+
+- None
+
+## Context
+
+queue_gnn_gate_set2.py从现有physical_gate模板构造set2运行配置，排队期保存独立配置和预检。
+
+## Parameter Table
+
+| 参数 | 本次值 | 约束 |
+| --- | --- | --- |
+| GPU／world_size | 2,3,4／3 | 三卡均无计算进程 |
+| poll interval／idle confirmations | 60秒／2 | 前序四阶段均complete |
+| state／action profile | unified23／enhanced25 | 完整state两阶段一致 |
+| physical_gating／shared_kv_film | true／false | 原门控结构，初始.9 |
+| hidden／layers／heads | 128／2／4 | 总参数1003174 |
+| static／dynamic episodes | 20000／10000 | 无自动早停 |
+| batch／per-rank valid samples | 64／22,22,20 | 补齐至66但两槽不计loss |
+| seed／eval_seed | 7／1007 | dataset2_cost0固定划分 |
+| LR／entropy | 静态3e-4→5e-5／.02→.005；动态1e-4→2e-5／.01→.003 | 原计划 |
+| update／epochs／validation | 10回合／4／500回合 | checkpoint latest100、snapshot5000 |
+| output／dynamic source | GNN+gate_set2/{static,dynamic}／本次static/checkpoints/best.pt | 严格schema迁移，动态重置优化器 |
+
+## Constraint Rules
+
+- 不改batch为63或66；审查副本暂调整为66只用于绕过旧checker整除限制，保存配置与实际模型仍64。
+- 目标父目录存在则拒绝覆盖；前序失败不自动接续，排队与训练信号可终止本链。
+
+## Preset Profiles
+
+- --check：CPU检查静态动态设置、数据及当前就绪状态，不创建输出。
+- 后台队列：本次已启动，条件满足自动先静态后动态。
+
+## Validation Notes
+
+21项入口及回归测试通过，实际两阶段数据模型预检passed=true；batch64三进程梯度等价此前已验证。当前排队不分配GPU。
+
+---
+
+Doc-ID: PARAM-2026-11-10-003
+Doc-Type: params
+Owner: Codex
+Date: 2026-11-10
+Version: v1.0
+Status: final
+Source: set3完整state GNN＋门控在GPU5–7排队
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 完整state、dataset3_cost0、GPU5／6／7、三进程，静态20k→动态10k。
+- 全局batch64、有效22／22／20，两补齐槽位屏蔽；门控true、FiLM false。
+- 静态best严格迁移到动态，独立输出GNN+gate_set3，排队PID253017。
+
+## Assumptions
+
+- 与set2门控沿用相同模型和优化协议，仅数据、GPU、结果路径不同。
+
+## Open Questions
+
+- None
+
+## Context
+
+queue_gnn_gate_set3.py从physical_gate模板生成独立配置，保留原模板及当前训练。
+
+## Parameter Table
+
+| 参数 | 值 | 约束 |
+| --- | --- | --- |
+| GPU／world_size | 5,6,7／3 | 三卡均无计算进程 |
+| 检查间隔／连续就绪 | 60秒／2次 | 原simplestate set3四阶段完成 |
+| 数据／state | dataset3_cost0／unified23＋enhanced25 | 静态动态相同维度 |
+| 门控／FiLM／初始门值 | true／false／.9 | 原900参数共享门控 |
+| hidden／layers／heads | 128／2／4 | 总参数1003174 |
+| 回合／batch／seed | 静态20000、动态10000／64／7 | eval1007，有效22／22／20 |
+| LR／熵计划 | 静态3e-4→5e-5、.02→.005；动态1e-4→2e-5、.01→.003 | 原配置 |
+| update／PPO epochs／验证 | 10／4／500 | latest100、snapshot5000 |
+| 结果／动态初始化 | GNN+gate_set3/{static,dynamic}／本次static/checkpoints/best.pt | 严格迁移、优化器重置 |
+
+## Constraint Rules
+
+- 三卡实际batch仍64，预检约束副本绕过旧整除规则；padding不计loss。
+- 静态完整训练且checkpoint齐全后启动动态，任何阶段失败不继续；父目录防覆盖、锁防重复。
+
+## Preset Profiles
+
+- --check：CPU预检，无训练输出。
+- 后台队列：本次已启动，自动等待并串行训练。
+
+## Validation Notes
+
+23项新旧队列测试通过，实际set3两阶段CPU预检passed=true；原三进程PPO梯度等价测试已有覆盖。
+
+
+---
+
+Doc-ID: PARAM-2026-11-11-001
+Doc-Type: params
+Owner: Codex
+Date: 2026-11-11
+Version: v1.0
+Status: final
+Source: 全实验独立测试评估，仅使用GPU0–1
+Activated-Skills: parameter-sanity, code-agent-core
+
+## Summary
+
+- 只使用GPU0、1，每卡一个模型评估进程，CPU线程每进程2。
+- 固定200例对应测试集、seed1007加实例序号、确定性动作，验证best选择保持不变。
+- 成功实例平均目标和完成率共同报告，另保留全量目标及失败明细。
+
+## Assumptions
+
+测试集与训练／验证路径分开；原环境物理和目标定义保持一致。
+
+## Open Questions
+
+未结束／未启动实验无最终测试值，留空等待。
+
+## Context
+
+scripts/evaluate_experiment_suite.py为独立推理入口，不修改训练超参数。
+
+## Parameter Table
+
+| 参数 | 类型 | 固定值／默认值 | 约束 |
+|---|---|---|---|
+| GPU | tuple | 0,1 | 每卡最多一个worker，已有计算进程不抢占 |
+| CPU线程 | int | 2 | OMP/MKL/torch一致 |
+| seed | int | 1007 | 每实例1007+排序序号 |
+| deterministic | bool | true | 使用argmax |
+| 实例数 | int | 200 | data/datasetN_cost0/{static,dynamic}/test |
+| checkpoint | path | checkpoints/best.pt | 与有效验证历史最佳episode、objective匹配 |
+| 轮询间隔 | 秒 | 15 | 等待新完成模型，无训练占卡 |
+| 成功定义 | bool | terminated且非truncated且两类违规均0 | 不按目标大小筛选 |
+
+## Constraint Rules
+
+- 评估前后核对checkpoint和测试数据SHA256，保存各自manifest与profile。
+- 已结束完整／早停／失败实验可评估best；运行中best不作最终测试。
+- 复用旧测试需checkpoint哈希、seed、确定性、profile、测试manifest和全部实例名一致。
+- 成功实例均值无成功样本时为null，失败实例保留在全量均值及完成率分母。
+
+## Preset Profiles
+
+- --check：列举32项及训练状态，无GPU分配。
+- --output：GPU0/1后台监督两条串行评估队列，等待当前训练结束自动补测。
+
+## Validation Notes
+
+新统计与状态测试4项、旧多profile测试6项通过；实际启动GPU0/1成功，GPU2–7继续原训练。
+
+
+---
+
+Doc-ID: PARAM-2026-11-11-002
+Doc-Type: params
+Owner: user
+Date: 2026-11-11
+Version: v1.0
+Status: final
+Source: GPU0–1上set2 GNN共享K/V＋类型FiLM静态到动态训练
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 沿用FiLM set1的完整state模型和训练参数，仅改变数据集与输出目录。
+- 每阶段使用dataset2_cost0对应静态或动态划分：1000训练、100验证、200测试。
+- 两卡全局batch64，对应每rank32，无需padding；动态继承本次静态最佳权重。
+
+## Assumptions
+
+- 验证集选择best，不使用测试集选模型。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/train_gnn_film_set1.py --dataset 2 --pause-evaluator 310832`，后台PID336150，输出 `outputs/GNN+FiLM_set2`。
+
+## Parameter Table
+
+| 参数 | 类型 | 静态值 | 动态值 | 单位／约束 |
+|---|---|---|---|---|
+| CUDA_VISIBLE_DEVICES | str | 0,1 | 0,1 | 物理GPU编号 |
+| distributed_world_size | int | 2 | 2 | 进程数，等于可见GPU数 |
+| shared_kv_film | bool | true | true | 共享K/V与关系类型FiLM |
+| physical_gating | bool | false | false | 与FiLM互斥 |
+| observation_profile | str | unified23 | unified23 | 完整state |
+| action_feature_profile | str | enhanced25 | enhanced25 | 动作特征 |
+| hidden_dim / gnn_layers / attention_heads | int | 128 / 2 / 4 | 128 / 2 / 4 | hidden_dim能被heads整除 |
+| episodes | int | 20000 | 10000 | 全局回合数，不乘GPU数 |
+| mini_batch_size | int | 64 | 64 | 全局有效样本数 |
+| episodes_per_update / ppo_epochs | int | 10 / 4 | 10 / 4 | 更新间隔／优化轮次 |
+| learning_rate → final_learning_rate | float | 0.0003 → 0.00005 | 0.0001 → 0.00002 | 正数、末值不高于初值 |
+| entropy_coef → final_entropy_coef | float | 0.02 → 0.005 | 0.01 → 0.003 | 非负递减 |
+| validation_interval | int | 500 | 500 | 回合 |
+| latest_checkpoint_interval / checkpoint_interval | int | 100 / 5000 | 100 / 5000 | 回合 |
+| seed / eval_seed | int | 7 / 1007 | 7 / 1007 | 随机种子 |
+| initialize_from | path | 无，从头初始化 | static/checkpoints/best.pt | 指向本次set2静态阶段 |
+
+## Constraint Rules
+
+- 两阶段均使用独立目录，已有目标目录或GPU计算进程存在时拒绝启动。
+- 静态进程退出码为0、历史达到目标且best/latest/final齐全，才进入动态阶段。
+- 动态启动前严格校验静态checkpoint架构匹配；预先的动态CPU配置检查暂不读取尚未生成的checkpoint。
+- 空闲评估调度器暂停期间不参与GPU调度；整条训练链退出后恢复。
+
+## Preset Profiles
+
+- 静态从头训练：20,000回合，学习率3e-4→5e-5，熵系数0.02→0.005。
+- 动态迁移微调：10,000回合，学习率1e-4→2e-5，熵系数0.01→0.003，重置优化器和历史。
+
+## Validation Notes
+
+20项相关测试通过；两阶段CPU预检通过；参数全部来自现有模板或用户明确指定的GPU和数据集，未改变全局batch或模型结构。
+
+
+---
+
+Doc-ID: PARAM-2026-11-12-001
+Doc-Type: params
+Owner: user
+Date: 2026-11-12
+Version: v1.0
+Status: final
+Source: 在对应训练卡组上补充独立测试集评估
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 不改变训练参数，复用已有测试集、确定性动作、种子与统计口径。
+- 每项独立使用单GPU；gate set2仅在2–4卡组，simplestate set3动态仅在5–7卡组，FiLM set2仅在0–1卡组。
+- 五项各200例；测试模型来自验证集选出的best，不用测试目标值改选模型。
+
+## Assumptions
+
+- 原卡组内无其它计算进程后才分配测试任务。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/test_completed_training.py` 复用 `scripts/evaluate_experiment_suite.py --worker`，新队列PID418642。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 单位／约束 |
+|---|---|---|---|
+| gpu_ids | list[int] | gate=[2,3,4]；simplestate=[5,6,7]；FiLM=[0,1] | 原训练物理卡组 |
+| CUDA_VISIBLE_DEVICES | str | 每个worker单卡 | 单项测试独立运行 |
+| seed | int | 1007 | 第i例使用1007+i，保持原测试顺序 |
+| deterministic | bool | true | 与既有评估口径一致 |
+| instance_count | int | 200 | 各dataset/phase独立test，不使用训练或验证集 |
+| checkpoint | path | 当前run/checkpoints/best.pt | 验证历史选取的最佳checkpoint |
+| OMP_NUM_THREADS / MKL_NUM_THREADS | str | 2 / 2 | 每worker CPU线程上限 |
+| polling interval | int | 5 | 秒 |
+| wait_pipeline | bool | FiLM=true | 静态与动态均成功完成后才测试 |
+
+## Constraint Rules
+
+- 训练未完整结束时不评估中途best；训练失败记录测试未执行原因。
+- 测试前后检查checkpoint和数据hash，结果必须包含有序200条实例和对应manifest。
+- 报告成功实例目标均值、有效完成数、完成率及包含失败惩罚的全量目标均值，不删除大目标样本。
+- 结果保存在模型运行目录下标准 `test_evaluation_*/results.json`，供原队列按hash、seed和数据manifest校验复用。
+
+## Preset Profiles
+
+- 已完成训练：gate静态、gate动态、simplestate动态立即并行补测，每项单卡。
+- 待结束训练：FiLM静态与动态等待整条训练链成功结束，随后在0、1卡各评估一项。
+
+## Validation Notes
+
+14项相关测试通过，五项GPU分配与训练完成条件预检通过；无新增或调整模型超参数。
+
+
+---
+
+Doc-ID: PARAM-2026-11-12-002
+Doc-Type: params
+Owner: user
+Date: 2026-11-12
+Version: v1.0
+Status: final
+Source: set3三卡FiLM与物理门控静态到动态训练
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 两组均为完整state、hidden128、两层四头，使用独立的set3静态与动态数据划分。
+- 静态20,000回合，动态10,000回合；每组动态只加载自己的静态best权重。
+- 不改变有效batch64、更新间隔10回合、seed7和验证seed1007。
+
+## Assumptions
+
+- 沿用既有set1／set2模板的学习率和熵系数计划。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+FiLM：`train_gnn_film_set1.py --dataset 3 --gpus 2,3,4`；门控：`queue_gnn_gate_set3.py --start-now --poll-seconds 5`。
+
+## Parameter Table
+
+| 参数 | 类型 | FiLM | 物理门控 | 约束／单位 |
+|---|---|---|---|---|
+| CUDA_VISIBLE_DEVICES | str | 2,3,4 | 5,6,7 | 用户指定物理卡组 |
+| distributed_world_size | int | 3 | 3 | 每卡一个DDP进程 |
+| shared_kv_film | bool | true | false | 两变体互斥 |
+| physical_gating | bool | false | true | 两变体互斥 |
+| physical_gate_initial | float | 不启用 | 0.9 | 现有门控模板 |
+| observation_profile | str | unified23 | unified23 | 完整state |
+| action_feature_profile | str | enhanced25 | enhanced25 | 相同动作特征 |
+| hidden_dim / gnn_layers / attention_heads | int | 128 / 2 / 4 | 128 / 2 / 4 | head维度32 |
+| episodes | int | 静态20000；动态10000 | 静态20000；动态10000 | 全局回合 |
+| mini_batch_size | int | 64 | 64 | 全局有效样本 |
+| episodes_per_update / ppo_epochs | int | 10 / 4 | 10 / 4 | 采样更新间隔／优化轮次 |
+| learning_rate → final_learning_rate | float | 静态3e-4→5e-5；动态1e-4→2e-5 | 同左 | 正数、递减 |
+| entropy_coef → final_entropy_coef | float | 静态0.02→0.005；动态0.01→0.003 | 同左 | 非负、递减 |
+| validation_interval | int | 500 | 500 | 回合 |
+| latest_checkpoint_interval / checkpoint_interval | int | 100 / 5000 | 100 / 5000 | 回合 |
+| seed / eval_seed | int | 7 / 1007 | 7 / 1007 | 随机种子 |
+| OMP_NUM_THREADS / MKL_NUM_THREADS | str | 2 / 2 | 2 / 2 | CPU线程 |
+
+## Constraint Rules
+
+- dataset3_cost0每阶段1000训练、100验证、200测试；三种split路径独立，静态与动态路径分别匹配。
+- batch64在三个rank的完整mini-batch有效样本分配为22、22、20，两个padding位置在损失中屏蔽；预检仅绕过旧的整除限制，不改变训练有效batch。
+- 两组均从头静态训练；动态initialize_from分别指向 `GNN+FiLM_set3/static/checkpoints/best.pt` 与 `GNN+gate_set3/static/checkpoints/best.pt`。
+- 静态正常退出、历史达到20000且best/latest/final齐全才进入动态；迁移前严格校验架构和输入profile。
+- GPU有计算进程或目标目录已存在时不覆盖；本次门控明确启动模式仅解除旧前置链依赖。
+
+## Preset Profiles
+
+- FiLM静态／动态：上述静态／动态计划，GPU2–4，shared_kv_film=true。
+- 物理门控静态／动态：相同训练计划，GPU5–7，physical_gating=true。
+
+## Validation Notes
+
+两组两阶段CPU预检通过；37项launcher／queue检查及2项三卡有效batch64的分布式数值一致性检查通过。无新增模型结构或未验证的批量缩放规则。
+
+
+---
+
+Doc-ID: PARAM-2026-11-16-001
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 最佳checkpoint对应测试集测评，补齐FiLM set3
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 训练已完整结束，best来自对应验证集，不根据测试结果改选checkpoint。
+- 缺少的FiLM set3静态、动态各200例，分别在GPU2、3执行；原训练卡组范围仍为2、3、4。
+- 已有四项匹配结果通过数据和模型hash、种子及实例完整性复核后保留。
+
+## Assumptions
+
+- 本次只补齐缺项，沿用此前独立测试的所有推理和统计参数。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`test_completed_training.py --scope film-set3`；监督PID782967，输出 `outputs/test_evaluation_film_set3_20261116_110636`。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 约束／单位 |
+|---|---|---|---|
+| scope | str | film-set3 | 本次仅补测FiLM set3静态与动态 |
+| gpu_ids | list[int] | [2,3,4] | 原训练卡组，静态／动态分别使用空闲GPU2、3 |
+| seed | int | 1007 | 第i例使用1007+i |
+| deterministic | bool | true | 确定性动作 |
+| test count | int | 200/阶段 | 独立的dataset3_cost0/static/test或dynamic/test |
+| checkpoint | path | 各run/checkpoints/best.pt | 与验证历史最优episode及objective严格一致 |
+| OMP_NUM_THREADS / MKL_NUM_THREADS | str | 2 / 2 | 每worker CPU线程数 |
+| poll interval | int | 5 | 秒 |
+
+## Constraint Rules
+
+- 测试前后checkpoint和数据hash不变，训练链全部成功完成后才测试。
+- 实例名与实际JSON内部name比较；manifest按原始文件名及sha256比较。
+- 报告成功实例均值、有效完成数、完成率和含失败惩罚的全量均值；不删除大目标或失败实例。
+
+## Preset Profiles
+
+- 静态：dataset3_cost0/static/test，当前FiLM set3静态best，GPU2。
+- 动态：dataset3_cost0/dynamic/test，当前FiLM set3动态best，GPU3。
+
+## Validation Notes
+
+19项相关测试通过，四项已有结果完整性复核通过，本次不改变模型或训练超参数。
+
+
+---
+
+Doc-ID: PARAM-2026-11-16-002
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: set1完整state静态MLP到动态测试集的迁移基线
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 静态checkpoint在动态test评估，两个phase分别保存，不改原静态run的test_instances字段。
+- 保持此前逐例seed1007+i与确定性动作，便于与已有动态MLP结果配对。
+- 使用指定0–1卡组内GPU0，保留全部200例及失败惩罚。
+
+## Assumptions
+
+- 当前MLP checkpoint使用相同动态输入语义和完整state，未启用门控或FiLM。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`test_completed_training.py --scope fullstate-mlp-set1-static-to-dynamic`，源run为fullstate_jingtai_set1/MLP。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 约束／单位 |
+|---|---|---|---|
+| checkpoint | path | 静态run/checkpoints/best.pt | 静态验证集选出的第20000回合 |
+| checkpoint_training_phase | str | static | 保持模型来源准确 |
+| evaluation_phase | str | dynamic | 仅显式允许static→dynamic跨阶段方向 |
+| test_instances | path | data/dataset1_cost0/dynamic/test | 独立200例test |
+| model_type | str | mlp | 无图注意力、物理门控或FiLM |
+| observation_profile / action_feature_profile | str | unified23 / enhanced25 | 完整state及匹配动作输入 |
+| CUDA_VISIBLE_DEVICES | str | 0 | 指定0–1卡组内单GPU |
+| seed | int | 1007 | 每例seed=1007+i |
+| deterministic | bool | true | 确定性动作 |
+| OMP_NUM_THREADS / MKL_NUM_THREADS | str | 2 / 2 | 每worker CPU线程数 |
+
+## Constraint Rules
+
+- 测试目标必须是匹配dataset1的dynamic/test，不能指向train或validation；原训练配置不变。
+- checkpoint episode与静态验证历史best一致；测试前后checkpoint和全部数据hash不变。
+- 对照时匹配完整manifest、实例顺序和逐例seed，全量平均目标与有效完成率共同报告。
+
+## Preset Profiles
+
+- 静态到动态基线：本次静态best，在动态test重新评估200例。
+- 动态到动态参考：复用已有动态best、同一动态test、相同seed与动作设置的200例结果。
+
+## Validation Notes
+
+25项相关回归通过；静态模型schema与动态语义版本预检通过；已有动态MLP参考结果完整性复核通过。
+
+
+---
+
+Doc-ID: PARAM-2026-11-16-003
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 全部静态／动态最佳checkpoint的30例故障对照
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 三个动态test各固定200例中的30故障例，原索引和逐例seed保持不变。
+- 18组模型配对、36个checkpoint任务，最多8卡并发，每卡一个，释放后自动领取下一任务。
+- 缓存校验包含checkpoint与测试文件hash、实例名、scenario、逐例seed和输入profile；全量30例目标用于主表均值。
+
+## Assumptions
+
+- 使用现有数据、现有验证集best及现有环境语义，不调整训练超参数。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`compare_fault_checkpoints.py --output outputs/fault_checkpoint_comparison_20261116_123353`，监督PID790200。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 约束／单位 |
+|---|---|---|---|
+| gpu_ids | list[int] | 0–7 | 每卡最多一个本队列worker，已有计算进程则等待 |
+| fault_only | bool | true | 每数据集必须恰好30例 |
+| 场景 | str | breakdown_only＋both | 20例仅故障＋10例故障与新作业 |
+| source | path | dataset1／2／3_cost0/dynamic/test | 同一配对双方使用同一测试集合 |
+| seed | int | 1007 | 逐例1007＋原200例中的索引，不在30例内重新编号 |
+| deterministic | bool | true | 既有评估动作方式 |
+| checkpoint | path | 各run/checkpoints/best.pt | 按对应验证历史选best |
+| OMP_NUM_THREADS / MKL_NUM_THREADS | str | 2 / 2 | 每worker CPU线程数 |
+| queue polling interval | int | 2 | 秒 |
+| mean_objective | float | 全30例均值 | 保留失败惩罚，不改为成功子集均值 |
+| 改善百分比 | float | (静态均值−动态均值)/静态均值×100 | 正值动态更好；静态为0时不定义 |
+
+## Constraint Rules
+
+- 两模型的full test manifest、故障实例顺序与逐例seed严格匹配；不得把故障子集重新从seed1007编号。
+- 静态模型在对应动态测试故障子集评估，原静态训练配置不变；训练中模型不参与。
+- 已结束但failed／early_stopped的实验允许使用已保存的验证best，必须在结果附注保留状态。
+- 缓存与新推理结果均重新汇总30例，报告中保留有效完成数及逐例信息。
+
+## Preset Profiles
+
+- 缓存复用：当前checkpoint与动态test完整匹配时提取30例，CPU验证后标为完成。
+- GPU补测：无匹配缓存时，在空闲GPU独立推理30例，每卡一个，结束后自动接续。
+
+## Validation Notes
+
+35项相关回归通过；三个数据集均验证20例breakdown_only与10例both；初始19项缓存通过审计，17项需GPU补测。
+
+
+---
+
+Doc-ID: PARAM-2026-11-16-004
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 共享K/V＋类型FiLM固定工作负载速度基准
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 仅比较计算耗时，不重训生产模型、不修改checkpoint。
+- 输入为原版策略在各数据集首个静态测试实例上生成的相同64步快照。
+- GPU4独占本次模型任务，保持CPU线程2、float32，交替3次测量取中位数。
+
+## Assumptions
+
+- 模型均完整state、hidden128、两层四头，无物理门控；仅shared_kv_film开关不同。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`benchmark_film_fixed_workload.py`，结果 `outputs/film_fixed_speed_20261116_1440`。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 单位／约束 |
+|---|---|---|---|
+| CUDA_VISIBLE_DEVICES | str | 4 | 空闲A800 80GB；占用时拒绝运行 |
+| dtype | str | float32 | 两架构一致 |
+| torch_num_threads / OMP / MKL | int | 2 / 2 / 2 | CPU线程 |
+| snapshots | int | 64 | 同观测、动作候选和图输入 |
+| inference warmup | int | 16 | 每模型、每动作模式的预热调用 |
+| repeats | int | 3 | 原版／FiLM交替顺序，取中位数 |
+| ppo_samples / mini_batch_size | int | 64 / 64 | 单卡，无DDP |
+| ppo_epochs | int | 4 | 每次更新 |
+| ppo warmup | int | 1 | 每架构预热一次完整更新 |
+| validation_act deterministic | bool | true | 验证动作选择 |
+| sampling_act deterministic | bool | false | 采样动作选择 |
+
+## Constraint Rules
+
+- 动作计时前后CUDA同步；包含原生act整理、传输和返回，不包含重新生成环境图及环境推进。
+- PPO只用于固定输入计算基准；同一历史rollout复用不解释为合法收敛实验。
+- checkpoint仅加载到内存，PPO更新只修改内存模型，不保存训练权重。
+
+## Preset Profiles
+
+- 动作推理：预热16次，再交替3轮，每轮64次，报告ms/动作中位数。
+- PPO更新：相同64条数据、batch64、4epochs，预热1次后交替3轮，报告秒/更新中位数。
+
+## Validation Notes
+
+set1–3所有短基准完成，9种指标的全部重复值均为有限正数。历史验证耗时另列GPU数量，不将跨卡数差异当作架构加速比。
+
+---
+
+Doc-ID: PARAM-2026-11-16-005
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: set1–3仅共享K/V、不加FiLM的静态＋动态训练
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 仅改变关系K/V投影共享方式，关闭FiLM与物理门控；其余沿用完整state既有超参。
+- set1／2单卡，set3两卡，全局mini_batch_size64保持一致。
+- 各组静态20,000回合，动态10,000回合从对应静态best初始化。
+
+## Assumptions
+
+延用已有 seed7／eval_seed1007，使用 train1000／validation100／test200 的既有划分；本任务只训练和验证，测试集不参与best选择。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/train_shared_kv_only.py` 与 `outputs/GNN+sharedKV_set{1,2,3}/{static,dynamic}/training_config.json`。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 范围／单位／依赖 |
+|---|---|---|---|
+| shared_kv_only | bool | true | 与FiLM、物理门控互斥 |
+| shared_kv_film / physical_gating | bool | false / false | 不创建调制或门控参数 |
+| shared_kv_only_schema_version | int | 1 | checkpoint架构版本，拒绝未知版本 |
+| observation_profile / action_feature_profile | str | unified23 / enhanced25 | 完整state，迁移须匹配 |
+| hidden_dim / gnn_layers / attention_heads | int | 128 / 2 / 4 | hidden_dim可被heads整除 |
+| GPU / world_size | int列表／int | set1:4/1；set2:5/1；set3:6,7/2 | 固定用户指定卡 |
+| episodes | int | 静态20000，动态10000 | 全局回合，不乘world_size |
+| learning_rate / final_learning_rate | float | 静态3e-4→5e-5，动态1e-4→2e-5 | 线性调度，阶段内计数 |
+| entropy_coef / final_entropy_coef | float | 静态.02→.005，动态.01→.003 | 沿用原预设 |
+| mini_batch_size / ppo_epochs | int | 64 / 4 | global batch，单／双卡可整除 |
+| episodes_per_update | int | 10 | 全局采样；两卡各5回合 |
+| gamma / gae_lambda / clip_ratio | float | 1 / .95 / .2 | 沿用原预设 |
+| value_coef / max_grad_norm | float | .5 / .5 | 沿用原预设 |
+| validation_interval | int | 500 | 每次评估全部100例验证集 |
+| latest / periodic checkpoint interval | int | 100 / 5000 | best另按验证目标改善保存 |
+| seed / eval_seed | int | 7 / 1007 | 固定随机种子 |
+| OMP_NUM_THREADS / MKL_NUM_THREADS | int | 2 / 2 | 每训练worker限制CPU线程 |
+| initialize_from | path | 动态使用本组static/checkpoints/best.pt | 静态从头训练；动态重置优化器 |
+
+## Constraint Rules
+
+- 不允许同时打开shared_kv_only与FiLM或物理门控；MLP不接受新开关。
+- 实际动态启动前严格校验环境语义、输入profile和model_kwargs；不兼容则停止。
+- GPU已占用或输出目录已存在时拒绝启动，不覆盖旧结果。
+- 每阶段退出成功后校验history完整长度、最后回合及best／latest／final文件，再进入下一阶段。
+
+## Preset Profiles
+
+- set1：GPU4单卡，完整state，静态20k→动态10k。
+- set2：GPU5单卡，相同全局训练参数，采用set2数据。
+- set3：GPU6–7双卡DDP，全局batch64／每卡32，采用set3数据。
+
+## Validation Notes
+
+六阶段CPU预检均通过，静态／动态模型均为412,450参数。55项相关回归通过，涵盖前向、梯度、checkpoint、迁移、profile和双卡PPO更新。
+
+---
+
+Doc-ID: PARAM-2026-11-16-006
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 独立故障动态测试集set1／set2／set3，cost0，各100例
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 仅保留breakdown_only与both，按原动态分布条件化为2/3与1/3；每组100例取67／33。
+- 复用现有基础实例生成函数与事件生成函数，采用独立种子，不改变工艺及事件参数。
+- 固定轨迹、零辅助费用、隐藏未来事件，所有300例只用于测试。
+
+## Assumptions
+
+插单仍指原生成器的延迟释放既有工件；cost0只将去应力和补偿费用设为0，保留原时长、物理参数和目标权重。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/generate_fault_test100.py`；目标 `data/dynamic_fault_test100_cost0/`。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 单位／范围／依赖 |
+|---|---|---|---|
+| SIZE | int | 100 | 每个set的测试实例数，共300 |
+| SEED | int | 2026111601 | 本次独立生成种子 |
+| base_seed | int | SEED＋set编号×1000003 | 每例再加1～100 |
+| event_seed | int | base_seed＋400000 | 每例再加1～100，固定轨迹 |
+| scenario shuffle seed | int | base_seed＋200000 | 随机化两类场景排列 |
+| breakdown_only / both | int | 67 / 33 | 最大余数法，源概率.10／.05 |
+| mode | str | fixed | reset seed不改变事件轨迹 |
+| job release count | int | 1～2 | 条件概率.90／.10，仅both启用 |
+| release time fraction | float | .05～.30 | 相对原参考时长 |
+| breakdown count | int | 1～2 | 条件概率.95／.05，普通生产设备 |
+| breakdown time fraction | float | .15～.70 | 相对原参考时长 |
+| repair duration factor | float | .50～1.50 | 相对平均加工时长 |
+| interruption_policy | str | pause_resume | 故障暂停、修复后恢复 |
+| stress_relief.cost / compensation.cost | float | 0 / 0 | 仅两项辅助费用清零 |
+| future / unreleased visibility | bool | false / false | 沿用动态输入语义2 |
+
+## Constraint Rules
+
+- 不含无事件或仅插单场景；每例必须有机器故障事件，both还须含1～2个释放事件。
+- 每个set保留原工件、工序、机器规模及所有非成本参数，不根据模型分数筛选。
+- 与三规模既有cost0静态／动态所有split的基础实例不得重复；跨新集合也不得重复。
+- 源数据完整、原故障场景2:1配比未改变、所有文件校验和及种子重建均通过后才发布；不覆盖已存在目标。
+
+## Preset Profiles
+
+- set1：6～10工件，每件4～7道普通工序，4普通机器＋2辅助机器。
+- set2：12～20工件，每件5～10道普通工序，6～10普通机器＋2辅助机器。
+- set3：18～30工件，每件6～13道普通工序，10～16普通机器＋2辅助机器。
+
+## Validation Notes
+
+4项测试通过。生产300例均成功加载，固定轨迹不依赖reset seed；事件合法性、cost0、SHA256、去重、配额和全参数重建均通过。原始来源和逐例种子记录在manifest，规模统计见validation_report。
+
+---
+
+Doc-ID: PARAM-2026-11-16-007
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: MLP完整state set2静态／动态best在新100例故障动态测试集上的配对测评
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 使用GPU5共享评估，CPU线程2、nice10，保留既有训练。
+- 两模型同100例、同固定事件、同seed和确定性动作。
+- 全部样本及双侧有效口径分开记录，不按目标值剔除。
+
+## Assumptions
+
+只评估现有验证best，不重新训练、不更新模型参数；case文件名排序与生成manifest一致。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/evaluate_fault_test100_pair.py`；本次dataset2，输出 `outputs/fault100_fullstate_set2_MLP_20261116_172151`。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 范围／依赖 |
+|---|---|---|---|
+| CUDA_VISIBLE_DEVICES | str | 5 | 与现有训练共享，额外模型显存约0.5GiB |
+| OMP / MKL / torch threads | int | 2 / 2 / 2 | 限制评估CPU资源 |
+| nice | int | 10 | 低于默认CPU调度优先级 |
+| instances | path | data/dynamic_fault_test100_cost0/set2/test | 恰好100例，67仅故障＋33混合 |
+| static checkpoint | path | outputs/fullstate_jingtai_set2/MLP/checkpoints/best.pt | 验证最优，episode20000 |
+| dynamic checkpoint | path | outputs/fullstate_dongtai_set2/MLP/checkpoints/best.pt | 验证最优，episode500 |
+| observation / action profile | str | unified23 / enhanced25 | 完整state，各92,162参数 |
+| seed | int | 1007＋文件排序索引 | 两模型相同 |
+| deterministic | bool | true | 固定策略动作选择 |
+
+## Constraint Rules
+
+- 新数据文件与manifest逐一校验；原checkpoint与验证最优记录一致。
+- 两模型必须都是完整state MLP且输入语义兼容。
+- 测试前后文件和权重SHA256保持不变；输出目录必须是新目录。
+- 有效样本须正常结束、无截断、无调度或就绪违规；删除时两侧共同删除，保留全部实例主统计。
+
+## Preset Profiles
+
+- 全部故障：100例，主评估。
+- 仅故障：67例，分组统计。
+- 故障＋插单：33例，分组统计。
+
+## Validation Notes
+
+预检已确认数据100例、两模型输入profile一致、checkpoint语义7／2、验证best回合20000／500。最终结果与有效完成情况见同目录results.json。
+
+实际200次调度全部正常完成，无截断、无调度／就绪违规；逐例seed为1007～1106。测试前后权重及数据哈希一致，三组均值通过独立重算校验；结果于17:25:21保存完成。
+
+---
+
+Doc-ID: PARAM-2026-11-16-008
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 新100例故障测试集18组对比的GPU5–7共享评估队列
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 每卡一个评估进程，三卡最多三个worker，较大set优先，完成自动补位。
+- 共36个验证best、每个100例；200条可复用，新增3400次调度。
+- 主表为双侧共同有效配对；全量原始值、场景子集、异常记录另存。
+
+## Assumptions
+
+沿用此前18组及其验证best，加入的是新的独立故障测试集，不包含正在训练的仅共享K/V新实验。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`scripts/compare_fault_test100.py`，输出 `outputs/fault_test100_comparison_20261116_173132`。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 范围／依赖 |
+|---|---|---|---|
+| GPUS | tuple[int] | 5,6,7 | 固定指定卡；允许与已授权训练共享 |
+| workers_per_gpu | 调度约束 | 1 | 本队列并发总数3 |
+| model pairs / checkpoints | int | 18 / 36 | 每组static与dynamic各一个验证best |
+| instances_per_checkpoint | int | 100 | 对应set，67仅故障＋33混合 |
+| seed | int | 1007+i | i为新集合固定文件排序0～99，两侧相同 |
+| deterministic | bool | true | 固定动作选择 |
+| torch / OMP / MKL threads | int | 2 / 2 / 2 | 每评估worker |
+| nice | int | 10 | 低优先级CPU调度 |
+| scheduling poll interval | int | 2 | 秒 |
+| dispatch priority | tuple | dataset降序、GNN优先 | 减少大任务尾部等待 |
+| context | path | data/dynamic_fault_test100_cost0/set{1,2,3}/test | SHA256与生成manifest一致 |
+| improvement_percent | float | 100×(static−dynamic)/static | 保留正负号，不截断 |
+
+## Constraint Rules
+
+- 逐项核对模型类型、完整／简化profile、门控／FiLM标记、环境语义、验证best回合和目标。
+- 缓存只允许此前新set2完整MLP结果，要求checkpoint、测试文件、seed、profile与逐例顺序完全一致；不复用旧30例分数。
+- 任一侧无效时，主表从两侧共同剔除同一实例；合法高值不剔除，全100例原始均值另存。
+- 单项失败后继续其余项；不将失败或待完成项填写为0%。
+
+## Preset Profiles
+
+- set3：先调度，100例／checkpoint，较大规模。
+- set2：其次调度，完整MLP静态／动态已缓存，其余照常测评。
+- set1：最后调度，较小规模；原静态GNN早停状态保留。
+
+## Validation Notes
+
+36个checkpoint预检通过，2项缓存通过逐例校验，21项新旧回归通过；首批3个worker准确映射GPU5／6／7且均已开始评估。
+
+---
+
+Doc-ID: PARAM-2026-11-16-009
+Doc-Type: params
+Owner: user
+Date: 2026-11-16
+Version: v1.0
+Status: final
+Source: 新100例测试队列扩展到GPU4–7
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 本次显式设置`--gpus 4,5,6,7 --resume`，并发从3增加到4。
+- 原worker身份和进度保留，数据及统计规则不变。
+- 原训练继续运行，评估线程和CPU优先级沿用既有设置。
+
+## Assumptions
+
+用户授权GPU4与原训练共享。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`compare_fault_test100.py`，原输出目录保持不变，新监督PID826376。
+
+## Parameter Table
+
+| 参数 | 类型 | 本次值 | 约束 |
+|---|---|---|---|
+| --gpus | tuple[int] | 4,5,6,7 | 唯一GPU索引，每卡一个worker |
+| --resume | bool | true | 已存在队列，原调度器已退出 |
+| process_start_ticks | str | /proc/PID/stat第22项 | 防止将复用PID误作原worker |
+| threads / nice | int | 2 / 10 | 沿用原评估设置 |
+
+## Constraint Rules
+
+- 已运行worker所在GPU必须包含在新GPU列表内，不允许一个GPU接管两个worker。
+- 旧调度器仍存活时拒绝接管；进程身份变化或已退出后必须通过结果校验才可记完成。
+- 已完成结果复核，新旧测试manifest、checkpoint SHA256保持一致。
+
+## Preset Profiles
+
+- 原三卡：5,6,7。
+- 用户本次扩容：4,5,6,7。
+
+## Validation Notes
+
+25项回归通过；生产接管后三个旧PID保持不变，新GPU4任务已启动，四卡运行正常。
+
+---
+
+Doc-ID: PARAM-2026-11-17-001
+Doc-Type: params
+Owner: user
+Date: 2026-11-17
+Version: v1.0
+Status: final
+Source: set1仅共享K/V结构、训练、数据审计及静态／动态checkpoint补测
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 仅补测既有验证best；运行中训练超参和架构保持原定义。
+- 同GPU4、CPU线程2、确定性动作、seed1007+i，对应模型使用完全相同的事件与实例。
+- 两种测试分布分开汇总，不混淆全动态与故障条件均值。
+
+## Assumptions
+
+所有checkpoint语义7／2、完整state23、动作25；新集合只含两类故障，原测试包含四类场景。
+
+## Open Questions
+
+等预算多seed的因果比较尚未执行；不根据本轮测试结果修改best选择。
+
+## Context (system/module)
+
+`evaluate_fault_test100_pair.py --dataset 1 --model GNN+sharedKV`；`--test-source new_fault100`或`original_dynamic200`。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 约束／依赖 |
+|---|---|---|---|
+| shared_kv_only / FiLM / gate | bool | true / false / false | 412450参数，层间独立K与V |
+| GPU / threads | int | 4 / 2 | 使用已完成set1训练后空闲卡 |
+| seed / deterministic | int／bool | 1007+i / true | 静态动态同实例同seed |
+| static best / dynamic best | int | 20000 / 7000 | 各自原验证选择结果 |
+| new_fault100 | counts | 67仅故障＋33混合 | 全新100基础实例 |
+| original_dynamic200 | counts | 130无事件＋40仅插单＋20仅故障＋10混合 | 原独立test，不涉及训练或验证 |
+| dynamic_train_mix | probabilities | .65 / .20 / .10 / .05 | 无事件／插单／故障／混合 |
+| evaluation filtering | validity | 正常结束、无截断／违规 | 另记双侧有效配对；不按目标高低筛选 |
+
+## Constraint Rules
+
+- 架构、profile、验证best与数据manifest逐项匹配；前后哈希保持一致。
+- 完全共享K/V不是类型无损的等价改写；singleton零特征前驱／后继消息存在方向标签混同。
+- 静态和动态验证集不同，不能直接将33.669314与34.079902计算微调改善；必须在相同动态集合配对。
+- epoch0动态验证保底是未来协议建议，本次既有实验不追溯改选。
+
+## Preset Profiles
+
+- 新100例：故障条件对照，与此前18组直接对齐。
+- 原200例：混合动态分布，可单独报告仅插单／仅故障／混合。
+
+## Validation Notes
+
+98项回归通过，原三个规模cost0与动态数据校验、新300例去重与轨迹检查均通过。新100例共享K/V静态／动态全部有效，均值34.896686／34.851915，改善0.1283%。
+
+原200例也全部有效，静态／动态均值34.227197／34.143576，改善0.2443%；仅插单＋0.8069%、仅故障−0.7392%、混合＋1.9612%。共600次调度的checkpoint／数据哈希、逐例seed、CSV行数及分组均值复核通过。GPU4评估进程已结束，显存释放。
+
+---
+
+Doc-ID: PARAM-2026-11-17-002
+Doc-Type: params
+Owner: user
+Date: 2026-11-17
+Version: v1.0
+Status: final
+Source: 新100例测试19组的合法高值／大退化筛选
+Activated-Skills: code-agent-core, parameter-sanity
+
+## Summary
+
+- 固定联合IQR阈值，原始100例上单次计算。
+- 同一实例从静态和动态两侧共同删除；正收益和负收益均保留原符号。
+- 四列表格第一列注明n，另存全部阈值与逐例清单。
+
+## Assumptions
+
+统计高值是筛选候选，不代表无效数据；原主表不覆盖。
+
+## Open Questions
+
+None
+
+## Context (system/module)
+
+`filter_fault_test100_results.py`；输出 `outputs/fault_test100_filtered_sensitivity_20261117_104520`。
+
+## Parameter Table
+
+| 参数 | 类型 | 值 | 范围／依赖 |
+|---|---|---|---|
+| --multiplier | float | 1.5 | 有限正数，本次固定 |
+| quantile method | str | linear | NumPy线性插值，原100例计算 |
+| dynamic high condition | bool | D＞Q3(D)＋1.5×IQR(D) | 严格大于 |
+| deterioration condition | bool | D−S＞0且D−S＞Q3(D−S)＋1.5×IQR(D−S) | 仅正退化尾部 |
+| combined condition | bool | 两条件取并集 | 重叠只删除一次 |
+| iteration | int | 1 | 不以改善为目标反复删样本 |
+| paired deletion | bool | true | 静态动态共同删除同一实例 |
+| input pairs / rows | int | 19 / 1900 | 原18组＋仅共享K/V set1 |
+
+## Constraint Rules
+
+- 原结果须对应同一新100例manifest、相同实例顺序／seed／场景，两侧均合法且目标有限。
+- 不重新计算筛选后阈值；不删除低目标或改善较大的样本；不将负改善改为0。
+- 各组n不同且保留实例可能不同，跨架构比较应以原同100例表为依据。
+
+## Preset Profiles
+
+- 原100例：主结果。
+- 本次联合1.5×IQR筛选：敏感性分析，不替换主结果。
+
+## Validation Notes
+
+7项测试通过，生产每组剔除0～4例、共30条模型配对记录，保留1870条；四列输出、来源哈希和独立重算均通过。

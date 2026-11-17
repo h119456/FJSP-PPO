@@ -133,3 +133,44 @@ nohup bash scripts/train_gnn_gate_set1.sh > outputs/gnn_gate_set1_launcher.log 2
 已检查六维数值与负收益、去应力／补偿状态、阶段映射、正反门值一致、结构／不适用边为1、快照独立、批图对齐、无边图、隐藏信息不泄漏、单入边及边Value路径、梯度更新、PPO未更新概率一致、旧schema回载、新checkpoint回载和静态到动态微调。新增门控900参数，未实现FiLM。
 
 门控分支和原网络都可能使用相似物理信息，实际质量收益仍需独立训练与消融。应以相同测试集比较原GNN、门控GNN，保持输入与预算口径，记录图构造和推理额外时间；门值不是动作概率或物理安全证明。
+
+## 自动等待后启动（2026-11-09）
+
+新增 `scripts/wait_train_gnn_gate_set1.py`，等待 simplestate dataset1 四个阶段全部 complete，随后用 GPU UUID 检查0–1卡无计算进程，连续两次检查就绪后启动现有静态→动态脚本。每60秒检查一次，锁阻止重复等待器；前序失败或目标目录已存在时退出并记录原因。查询失败或状态文件暂不可读时继续等待，不视为空闲。
+
+2026-11-09 17:33（北京时间）已按用户指示在后台启动，初始 PID131859、状态 waiting。训练配置显式 `physical_gating=true`、`shared_kv_film=false`，完整 state、dataset1_cost0、两卡、静态20k→动态10k，静态最佳 checkpoint 自动迁移。
+
+- 状态：`outputs/gnn_gate_set1_waiter_status.json`。
+- 等待及总启动日志：`outputs/gnn_gate_set1_launcher.log`。
+- 结果：`outputs/GNN+gate_set1/static` 和 `dynamic`。
+- 只读查询：`python scripts/wait_train_gnn_gate_set1.py --check`。
+
+等待器不是系统开机服务，机器重启后需手动重新启动；原训练失败时也不替它恢复。停止等待可向状态文件记录的 PID 发送 SIGTERM；若已经启动训练，该信号也会转发给所启动的训练进程组。静态成功后动态按脚本自动启动，任一阶段失败不继续。
+
+## dataset2 三卡排队（2026-11-10）
+
+用户最新指定GPU **2、3、4**，取代先前2–3卡的表述。`scripts/queue_gnn_gate_set2.py`已在北京时间17:13后台启动，监督PID227146。等待dataset2简化state四阶段全部complete，随后连续两次确认三张卡均无计算进程才启动；每60秒检查，查询失败不视为空闲，前序失败不继续。
+
+使用完整state、dataset2_cost0、原900参数物理门控，`physical_gating=true`、`shared_kv_film=false`。静态20,000回合从头训练，完成历史与best/latest/final检查后，将本次静态best严格迁移至动态10,000回合。两阶段各自保留训练配置、预检、曲线及三种checkpoint。
+
+全局batch保持64，三rank有效样本22／22／20、两个补齐槽位屏蔽，不将batch改为66。复用已有PPO非整除batch逻辑；仅此入口适配旧checker整除规则，公共训练代码和正在运行的监督入口未改变。
+
+- 队列状态：`outputs/gnn_gate_set2_queue_status.json`。
+- 排队配置：`outputs/gnn_gate_set2_queued_configs.json`；预检：`outputs/gnn_gate_set2_queue_preflight.json`。
+- 总日志：`outputs/gnn_gate_set2_launcher.log`。
+- 正式结果：`outputs/GNN+gate_set2/{static,dynamic}`，启动前不创建结果父目录。
+- 开始后状态副本：`outputs/GNN+gate_set2/pipeline_status.json`。
+
+锁阻止重复队列，目标结果存在则拒绝覆盖；阶段失败终止后续任务，机器重启不自动恢复。停止队列可向状态中的supervisor_pid发送SIGTERM，已启动训练时转发至训练进程组。
+
+## dataset3 三卡排队（2026-11-10）
+
+`scripts/queue_gnn_gate_set3.py`于北京时间19:02后台启动，监督PID253017，GPU固定5、6、7。等待原simplestate dataset3四阶段全部完成，再连续两次确认三卡无计算进程后启动完整state GNN＋门控静态20k→动态10k；每60秒检查。dataset3_cost0、seed7、全局batch64（22／22／20有效样本）、门控true、FiLM false及初始门值.9均沿用既定协议。
+
+动态严格加载本次静态best，静态完整历史和best/latest/final齐全才继续；失败停止、锁防重复、目标目录存在拒绝覆盖，不自动恢复重启或前序失败。
+
+- 队列状态：`outputs/gnn_gate_set3_queue_status.json`。
+- 排队配置／CPU预检：`outputs/gnn_gate_set3_queued_configs.json`、`gnn_gate_set3_queue_preflight.json`。
+- 总日志：`outputs/gnn_gate_set3_launcher.log`。
+- 正式结果：`outputs/GNN+gate_set3/{static,dynamic}`；训练启动后父目录有`pipeline_status.json`。
+- 只读检查：`python scripts/queue_gnn_gate_set3.py --check`；本次已排队，无需重复启动。

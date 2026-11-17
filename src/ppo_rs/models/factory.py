@@ -19,6 +19,8 @@ def build_actor_critic(
     **kwargs: Any,
 ) -> nn.Module:
     if model_type == "mlp":
+        if kwargs.get("shared_kv_only", False):
+            raise ValueError("shared_kv_only is available only for gnn_attention")
         if kwargs.get("shared_kv_film", False):
             raise ValueError("shared_kv_film is available only for gnn_attention")
         if kwargs.get("physical_gating", False):
@@ -27,6 +29,8 @@ def build_actor_critic(
     if model_type == "gnn_attention":
         if kwargs.get("shared_kv_film_schema_version", 1) != 1:
             raise ValueError("unsupported shared K/V FiLM schema version")
+        if kwargs.get("shared_kv_only_schema_version", 1) != 1:
+            raise ValueError("unsupported shared K/V-only schema version")
         if kwargs.get("physical_gate_schema_version", 1) != 1:
             raise ValueError("unsupported physical gate schema version")
         return GraphActorCritic(
@@ -40,6 +44,7 @@ def build_actor_critic(
             gnn_layers=int(kwargs.get("gnn_layers", 2)),
             attention_heads=int(kwargs.get("attention_heads", 4)),
             shared_kv_film=kwargs.get("shared_kv_film", False),
+            shared_kv_only=kwargs.get("shared_kv_only", False),
             physical_gating=kwargs.get("physical_gating", False),
             physical_gate_initial=float(kwargs.get("physical_gate_initial", 0.9)),
         )

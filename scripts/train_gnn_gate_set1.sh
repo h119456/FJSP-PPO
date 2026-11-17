@@ -27,7 +27,8 @@ for phase in ('static', 'dynamic'):
     config = json.loads((root / f'configs/physical_gate/full_gnn_{phase}.json').read_text())
     directory = output / phase
     directory.mkdir()
-    config.update(distributed_world_size=2, output_dir=str(directory), output_dir_mode='existing')
+    config.update(distributed_world_size=2, output_dir=str(directory), output_dir_mode='existing',
+                  shared_kv_film=False, physical_gating=True)
     for key in ('train_instances', 'eval_instances', 'test_instances'):
         config[key] = str(root / config[key])
     if phase == 'dynamic':

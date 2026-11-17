@@ -9,7 +9,7 @@ from torch import nn
 
 
 class HeterogeneousGraphAttentionLayer(nn.Module):
-    """Multi-head attention with independent K/V or shared K/V plus type FiLM."""
+    """Multi-head attention with independent K/V, shared K/V, or type FiLM."""
 
     def __init__(
         self,
@@ -19,10 +19,15 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
         heads: int,
         *,
         shared_kv_film: bool = False,
+        shared_kv_only: bool = False,
     ) -> None:
         super().__init__()
         if not isinstance(shared_kv_film, bool):
             raise ValueError("shared_kv_film must be boolean")
+        if not isinstance(shared_kv_only, bool):
+            raise ValueError("shared_kv_only must be boolean")
+        if shared_kv_film and shared_kv_only:
+            raise ValueError("enable only one shared K/V variant")
         if hidden_dim % heads:
             raise ValueError("hidden_dim must be divisible by attention heads")
         self.hidden_dim = hidden_dim
@@ -30,14 +35,17 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
         self.head_dim = hidden_dim // heads
         self.relation_count = relation_count
         self.shared_kv_film = shared_kv_film
+        self.shared_kv_only = shared_kv_only
+        self.shared_kv = shared_kv_film or shared_kv_only
         self.query = nn.Linear(hidden_dim, hidden_dim, bias=False)
-        if shared_kv_film:
+        if self.shared_kv:
             # K and V use different matrices; sharing is across relations only.
             self.shared_key = nn.Linear(hidden_dim, hidden_dim, bias=False)
             self.shared_value = nn.Linear(hidden_dim, hidden_dim, bias=False)
-            self.film_key_scale = nn.Parameter(torch.ones(relation_count, hidden_dim))
-            self.film_value_scale = nn.Parameter(torch.ones(relation_count, hidden_dim))
-            self.film_value_bias = nn.Parameter(torch.zeros(relation_count, hidden_dim))
+            if shared_kv_film:
+                self.film_key_scale = nn.Parameter(torch.ones(relation_count, hidden_dim))
+                self.film_value_scale = nn.Parameter(torch.ones(relation_count, hidden_dim))
+                self.film_value_bias = nn.Parameter(torch.zeros(relation_count, hidden_dim))
             # A static relation K bias cancels in relation/destination softmax.
         else:
             # Keep the legacy module names and initialization order unchanged.
@@ -102,7 +110,7 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
         node_count = nodes.shape[0]
         queries = self.query(nodes).view(node_count, self.heads, self.head_dim)
         aggregated = torch.zeros_like(nodes)
-        if self.shared_kv_film:
+        if self.shared_kv:
             # Project each node once, rather than re-projecting it per edge/type.
             shared_keys = self.shared_key(nodes)
             shared_values = self.shared_value(nodes)
@@ -121,14 +129,14 @@ class HeterogeneousGraphAttentionLayer(nn.Module):
             relation_sources = sources.index_select(0, relation_index)
             relation_destinations = destinations.index_select(0, relation_index)
             relation_edges = edge_features.index_select(0, relation_index)
-            if self.shared_kv_film:
-                keys = (
-                    shared_keys[relation_sources] * self.film_key_scale[relation]
-                ).view(-1, self.heads, self.head_dim)
-                values = (
-                    shared_values[relation_sources] * self.film_value_scale[relation]
-                    + self.film_value_bias[relation]
-                ).view(-1, self.heads, self.head_dim)
+            if self.shared_kv:
+                keys = shared_keys[relation_sources]
+                values = shared_values[relation_sources]
+                if self.shared_kv_film:
+                    keys = keys * self.film_key_scale[relation]
+                    values = values * self.film_value_scale[relation] + self.film_value_bias[relation]
+                keys = keys.view(-1, self.heads, self.head_dim)
+                values = values.view(-1, self.heads, self.head_dim)
             else:
                 keys = self.keys[relation](nodes[relation_sources]).view(
                     -1, self.heads, self.head_dim

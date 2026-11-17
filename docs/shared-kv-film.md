@@ -88,3 +88,46 @@ CUDA_VISIBLE_DEVICES=<空闲GPU编号> PYTHONPATH=src \
 新结构不能无损表示原版十套任意独立 K/V，不支持把旧独立 K/V checkpoint 严格加载为 FiLM 模型。应从新静态训练开始，再迁移至新动态训练。FiLM 初始恒等只对应共享 K/V 基线，不等同于原版独立 K/V 模型。
 
 当前模型入口拒绝同时开启 `shared_kv_film` 和 `physical_gating`。已有 fullstate、simplestate 配置及监督脚本未改动；本次未启动新正式训练。
+
+## dataset1 两卡自动串行训练（2026-11-10）
+
+用户已授权在GPU0–1执行完整state训练。新增 `scripts/train_gnn_film_set1.py`，以原模板生成两卡独立配置，静态20,000回合完成且best/latest/final齐全后，通过严格迁移预检进入动态10,000回合。`shared_kv_film=true`、`physical_gating=false`，其余训练超参数沿用模板。
+
+结果路径为 `outputs/GNN+FiLM_set1/static`、`dynamic`；监督状态为父目录的 `pipeline_status.json`，总日志为 `outputs/gnn_film_set1_launcher.log`，阶段日志为各阶段 `training.log`。静态从头训练，动态加载本次 `static/checkpoints/best.pt`；不使用原版或门控checkpoint。
+
+2026-11-10已启动后台监督进程PID223977。入口有文件锁、目标目录防覆盖和GPU占用检查，失败停止不进入下一阶段，SIGTERM转发到训练进程组，不自动恢复中断或机器重启。
+
+只读配置预检：
+
+```bash
+/root/miniconda3/envs/datascience/bin/python scripts/train_gnn_film_set1.py --check
+```
+
+首次手动后台启动（本次已经启动，请勿重复执行）：
+
+```bash
+nohup /root/miniconda3/envs/datascience/bin/python -u scripts/train_gnn_film_set1.py \
+  > outputs/gnn_film_set1_launcher.log 2>&1 < /dev/null &
+```
+
+
+## dataset2 两卡自动串行训练（2026-11-11）
+
+用户授权使用GPU0、1训练set2静态，再接动态。原入口现支持 `--dataset 2`，其余set1默认行为不变。实际后台命令为：
+
+```bash
+/root/miniconda3/envs/datascience/bin/python -u scripts/train_gnn_film_set1.py \
+  --dataset 2 --pause-evaluator 310832
+```
+
+监督进程PID336150，结果目录 `outputs/GNN+FiLM_set2/static`、`dynamic`；总日志 `outputs/gnn_film_set2_launcher.log`，状态 `outputs/GNN+FiLM_set2/pipeline_status.json`。静态20,000回合，动态10,000回合；动态只加载本次静态best权重并重置优化器。两卡batch64，完整state，`shared_kv_film=true`、`physical_gating=false`。
+
+本次暂时停止空闲评估调度器PID310832，整条训练链退出后自动SIGCONT恢复；活动评估worker存在时不会暂停或启动训练。SIGKILL／主机重启不能保证恢复。只读配置预检可使用 `--dataset 2 --check`，动态来源严格兼容性检查在静态完成后执行。
+
+## 仅共享 K/V 消融（2026-11-16）
+
+`shared_kv_only=true` 使用每层独立的一对 K、V 投影，在关系类型之间共享，不创建类型 FiLM 参数。完整 state、hidden128、两层四头模型为 412,450 参数；共享 K/V＋FiLM 为 420,130 参数。关系专属边特征投影、按关系／目标节点／头的 softmax 与跨关系求和均保留。
+
+该开关与 `shared_kv_film`、`physical_gating` 互斥；checkpoint 保存 `shared_kv_only=true` 和 `shared_kv_only_schema_version=1`，静态至动态迁移要求架构完全匹配。原版及 FiLM 的默认构造、参数名称和 checkpoint 元数据保持兼容。
+
+`scripts/train_shared_kv_only.py --dataset {1,2,3}` 分别使用 GPU4、GPU5、GPU6–7；输出到 `outputs/GNN+sharedKV_set{1,2,3}`。每组静态 20,000 回合，验证集 best 接续动态 10,000 回合，优化器重新初始化。`--check` 不占用 GPU，静态权重尚未生成时推迟实际迁移检查。监督器在静态完成、历史与 checkpoint 检查通过后才启动动态阶段；失败则停止后续阶段。
